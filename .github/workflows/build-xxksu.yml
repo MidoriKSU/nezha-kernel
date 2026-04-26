@@ -91,8 +91,9 @@ jobs:
 
       - name: Clone GKI Kernel
         run: |
-          mkdir -p kernel_workspace && cd kernel_workspace
-          git clone --depth=1 https://android.googlesource.com/kernel/common -b ${{ env.KERNEL_REF }} common
+          mkdir -p kernel_workspace/common
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/gki-kernel-android16-6.12-2025-06.tar.gz" -o /tmp/gki.tar.gz
+          tar -xzf /tmp/gki.tar.gz -C kernel_workspace/common
 
       - name: Setup xxKSU
         run: |
