@@ -46,21 +46,28 @@ jobs:
         if: ${{ inputs.toolchain == 'aosp-clang' }}
         run: |
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o clang.tar.gz
-          mkdir -p "$GITHUB_WORKSPACE/clang" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang"
-          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/clang-aosp" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-aosp"
+          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_ENV
           echo "USE_ARM_GCC=false" >> $GITHUB_ENV
-          "$GITHUB_WORKSPACE/clang/bin/clang" --version | head -1
-          "$GITHUB_WORKSPACE/clang/bin/ld.lld" --version | head -1
+          "$GITHUB_WORKSPACE/clang-aosp/bin/clang" --version | head -1
+          "$GITHUB_WORKSPACE/clang-aosp/bin/ld.lld" --version | head -1
+
+      - name: Cache (AOSP Clang)
+        if: ${{ inputs.toolchain == 'aosp-clang' }}
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/clang-aosp
+          key: toolchain-aosp-clang-v1
 
       - name: Initialize Toolchain (ZyC Clang + ARM GCC)
         if: ${{ inputs.toolchain == 'zyc-clang' }}
         run: |
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/Clang-23.0.0git-20260130.tar.gz" -o clang.tar.gz
-          mkdir -p "$GITHUB_WORKSPACE/clang" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang"
-          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/clang-zyc" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-zyc"
+          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-zyc/bin" >> $GITHUB_ENV
           echo "USE_ARM_GCC=true" >> $GITHUB_ENV
-          "$GITHUB_WORKSPACE/clang/bin/clang" --version | head -1
-          "$GITHUB_WORKSPACE/clang/bin/ld.lld" --version | head -1
+          "$GITHUB_WORKSPACE/clang-zyc/bin/clang" --version | head -1
+          "$GITHUB_WORKSPACE/clang-zyc/bin/ld.lld" --version | head -1
 
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/arm-gnu-toolchain-15.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz" -o arm64.tar.xz
           mkdir -p "$GITHUB_WORKSPACE/arm64-gcc" && tar -xf arm64.tar.xz -C "$GITHUB_WORKSPACE/arm64-gcc" --strip-components=1
@@ -71,6 +78,16 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/arm32-gcc" && tar -xf arm32.tar.xz -C "$GITHUB_WORKSPACE/arm32-gcc" --strip-components=1
           echo "ARM32_TOOLCHAIN=$GITHUB_WORKSPACE/arm32-gcc/bin/arm-none-eabi-" >> $GITHUB_ENV
           "$GITHUB_WORKSPACE/arm32-gcc/bin/arm-none-eabi-gcc" --version | head -1
+
+      - name: Cache (ZyC Clang + ARM GCC)
+        if: ${{ inputs.toolchain == 'zyc-clang' }}
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ github.workspace }}/clang-zyc
+            ${{ github.workspace }}/arm64-gcc
+            ${{ github.workspace }}/arm32-gcc
+          key: toolchain-zyc-clang-v1
 
       - name: Clone GKI Kernel
         run: |
@@ -87,10 +104,9 @@ jobs:
 
       - name: Get KSU Version
         run: |
-          git clone --depth=1 https://github.com/TheSillyOk/sh scripts-temp
-          KSU_VER=$(bash scripts-temp/get_ksuver.sh "backslashxx" "KernelSU" "master" || echo "unknown")
-          echo "KSU_VERSION=$KSU_VER" >> $GITHUB_ENV
-          rm -rf scripts-temp
+          cd kernel_workspace/common/KernelSU
+          KSU_VER=$(grep -oP "KSU_VERSION=\\K[0-9]+" kernel/Makefile | head -1)
+          echo "KSU_VERSION=${KSU_VER:-32479}" >> $GITHUB_ENV
 
       - name: Create Patch Healer
         run: |
@@ -126,11 +142,6 @@ jobs:
         run: |
           cd kernel_workspace/common
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
-
-      - name: Inject Device Localversion
-        run: |
-          cd kernel_workspace/common
-          echo "CONFIG_LOCALVERSION=\"${{ env.CONFIG_LOCALVERSION }}\"" >> arch/arm64/configs/gki_defconfig
 
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
@@ -171,10 +182,10 @@ jobs:
           if [ "${{ env.USE_ARM_GCC }}" = "true" ]; then
             export PATH="${{ env.ARM64_TOOLCHAIN }}:${{ env.ARM32_TOOLCHAIN }}:$PATH"
             CROSS_COMPILE_EXTRA="CROSS_COMPILE_COMPAT=${{ env.ARM32_TOOLCHAIN }}"
-            KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization" \
+            KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization"
           else
             CROSS_COMPILE_EXTRA=""
-            KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization" \
+            KCFLAGS=""
           fi
 
           cat > cc-wrapper <<-EOF
@@ -197,20 +208,20 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            KCFLAGS="$KCFLAGS" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
             CROSS_COMPILE="$CROSS_COMPILE" $CROSS_COMPILE_EXTRA \
-            KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization" \
             gki_defconfig
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            KCFLAGS="$KCFLAGS" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
             CROSS_COMPILE="$CROSS_COMPILE" $CROSS_COMPILE_EXTRA \
-            KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization" \
             Image
 
       - name: Package
