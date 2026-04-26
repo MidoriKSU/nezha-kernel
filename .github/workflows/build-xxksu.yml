@@ -171,10 +171,8 @@ jobs:
           if [ "${{ env.USE_ARM_GCC }}" = "true" ]; then
             export PATH="${{ env.ARM64_TOOLCHAIN }}:${{ env.ARM32_TOOLCHAIN }}:$PATH"
             CROSS_COMPILE_EXTRA="CROSS_COMPILE_COMPAT=${{ env.ARM32_TOOLCHAIN }}"
-            KCFLAGS="$KCFLAGS"
           else
             CROSS_COMPILE_EXTRA=""
-            KCFLAGS=""
           fi
 
           cat > cc-wrapper <<-EOF
@@ -197,7 +195,6 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="$KCFLAGS" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
@@ -206,7 +203,6 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="$KCFLAGS" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \

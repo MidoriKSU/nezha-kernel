@@ -165,11 +165,9 @@ jobs:
           if [ "${{ env.USE_ARM_GCC }}" = "true" ]; then
             export PATH="${{ env.ARM64_TOOLCHAIN }}:${{ env.ARM32_TOOLCHAIN }}:$PATH"
             CROSS_COMPILE_EXTRA="CROSS_COMPILE_COMPAT=${{ env.ARM32_TOOLCHAIN }}"
-            KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization"
-            KCFLAGS="$KCFLAGS"
+            export KCFLAGS="-Wno-default-const-init-var-unsafe -Wno-default-const-init-field-unsafe -Wno-unterminated-string-initialization"
           else
             CROSS_COMPILE_EXTRA=""
-            KCFLAGS=""
           fi
 
           cat > cc-wrapper <<-EOF
@@ -192,7 +190,6 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="$KCFLAGS" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
@@ -201,7 +198,6 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="$KCFLAGS" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
