@@ -192,7 +192,7 @@ jobs:
 
           export KBUILD_BUILD_USER="kleaf"
           export KBUILD_BUILD_HOST="build-host"
-          export KBUILD_BUILD_TIMESTAMP="Fri Sep 12 04:57:41 UTC 2025"
+          export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"
           export CC="$(pwd)/cc-wrapper"
 
           make -j$(nproc --all) O=out \
