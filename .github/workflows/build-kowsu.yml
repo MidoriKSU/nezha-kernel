@@ -91,10 +91,8 @@ jobs:
 
       - name: Clone GKI Kernel
         run: |
-          mkdir -p kernel_workspace/common && tar -xf gki.tar.gz -C kernel_workspace/common
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/android16-6.12-2025-06.tar.gz" -o gki.tar.gz
-          tar -xzf /tmp/gki.tar.gz -C kernel_workspace/common
-
+          mkdir -p kernel_workspace/common && tar -xf gki.tar.gz -C kernel_workspace/common
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
