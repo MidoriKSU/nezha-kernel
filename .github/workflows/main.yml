@@ -3,12 +3,6 @@ name: Build GKI Kernel
 on:
   workflow_dispatch:
     inputs:
-      device:
-        description: 'Target device'
-        required: true
-        type: choice
-        options:
-          - nezha
       toolchain:
         description: 'Toolchain'
         required: true
@@ -16,44 +10,34 @@ on:
         options:
           - aosp-clang
           - zyc-clang
-      ksu_variant:
-        description: 'KernelSU variant'
-        required: true
-        type: choice
-        options:
-          - xxksu
-          - kowsu
-          - kowsu-susfs
-      sub_level:
-        description: 'Kernel sublevel'
-        required: false
-        default: '23'
-        type: string
 
 jobs:
   build-xxksu:
-    if: ${{ inputs.ksu_variant == 'xxksu' }}
-    name: xxKSU ${{ inputs.device }} ${{ inputs.toolchain }}
+    name: xxKSU nezha ${{ inputs.toolchain }}
     uses: ./.github/workflows/build-xxksu.yml
     with:
-      device: ${{ inputs.device }}
+      device: nezha
       toolchain: ${{ inputs.toolchain }}
-      sub_level: ${{ inputs.sub_level }}
 
   build-kowsu:
-    if: ${{ inputs.ksu_variant == 'kowsu' }}
-    name: KowSU ${{ inputs.device }} ${{ inputs.toolchain }}
+    name: KowSU nezha ${{ inputs.toolchain }}
     uses: ./.github/workflows/build-kowsu.yml
     with:
-      device: ${{ inputs.device }}
+      device: nezha
       toolchain: ${{ inputs.toolchain }}
-      sub_level: ${{ inputs.sub_level }}
 
   build-kowsu-susfs:
-    if: ${{ inputs.ksu_variant == 'kowsu-susfs' }}
-    name: KowSU+SuSFS ${{ inputs.device }} ${{ inputs.toolchain }}
+    name: KowSU+SuSFS nezha ${{ inputs.toolchain }}
     uses: ./.github/workflows/build-kowsu-susfs.yml
     with:
-      device: ${{ inputs.device }}
+      device: nezha
       toolchain: ${{ inputs.toolchain }}
-      sub_level: ${{ inputs.sub_level }}
+
+  release:
+    needs: [build-xxksu, build-kowsu, build-kowsu-susfs]
+    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/release.yml
+    with:
+      release_tag: ${{ github.run_number }}
+      kernel_ver: "6.12.23"
+      release_title: "Nezha Kernel"
