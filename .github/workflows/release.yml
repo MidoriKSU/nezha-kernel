@@ -18,5 +18,40 @@ jobs:
     name: Publish · ${{ inputs.kernel_ver }}
     runs-on: ubuntu-latest
     steps:
-      - name: Dummy
-        run: echo "ok"
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '*-nezha-*'
+          path: release_zips
+          merge-multiple: true
+      - name: Compose Release Body
+        run: |
+          KV="${{ inputs.kernel_ver }}"
+          FILE_LIST=""
+          for f in release_zips/*.zip; do
+            FILE_LIST="${FILE_LIST}- $(basename "$f")\n"
+          done
+          printf "### Files\n%b\n" "$FILE_LIST" > release_body.md
+          echo "" >> release_body.md
+          echo "> **Device:** Xiaomi Nezha · SM8850" >> release_body.md
+          echo "> **Android:** 16 · GKI ${KV}" >> release_body.md
+          echo "> **Built:** $(date -u +'%Y-%m-%d %H:%M UTC')" >> release_body.md
+          echo "" >> release_body.md
+          echo "### Installation" >> release_body.md
+          echo "1. Boot into a custom recovery (e.g. TWRP) **or** use a root-capable flasher" >> release_body.md
+          echo "2. Flash the .zip matching your desired variant" >> release_body.md
+          echo "3. Reboot and verify root via the KernelSU app" >> release_body.md
+          echo "" >> release_body.md
+          echo "> **Back up your current boot image before flashing.**" >> release_body.md
+          echo "> This kernel is provided as-is, without warranty of any kind." >> release_body.md
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ inputs.release_tag }}"
+          name: "${{ inputs.release_title }} · ${{ inputs.release_tag }}"
+          body_path: release_body.md
+          files: release_zips/*.zip
