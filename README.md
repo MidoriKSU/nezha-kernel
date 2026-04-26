@@ -2,8 +2,7 @@
 
 GKI kernel build workspace for Popsicle & Nezha with KernelSU support.
 
-## Devices
-- Popsicle (SM8850)
+## Device
 - Nezha
 
 ## Toolchains
