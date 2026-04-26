@@ -1,0 +1,59 @@
+name: Build GKI Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Target device'
+        required: true
+        type: choice
+        options:
+          - nezha
+      toolchain:
+        description: 'Toolchain'
+        required: true
+        type: choice
+        options:
+          - aosp-clang
+          - zyc-clang
+      ksu_variant:
+        description: 'KernelSU variant'
+        required: true
+        type: choice
+        options:
+          - xxksu
+          - kowsu
+          - kowsu-susfs
+      sub_level:
+        description: 'Kernel sublevel'
+        required: false
+        default: '23'
+        type: string
+
+jobs:
+  build-xxksu:
+    if: ${{ inputs.ksu_variant == 'xxksu' }}
+    name: xxKSU ${{ inputs.device }} ${{ inputs.toolchain }}
+    uses: ./.github/workflows/build-xxksu.yml
+    with:
+      device: ${{ inputs.device }}
+      toolchain: ${{ inputs.toolchain }}
+      sub_level: ${{ inputs.sub_level }}
+
+  build-kowsu:
+    if: ${{ inputs.ksu_variant == 'kowsu' }}
+    name: KowSU ${{ inputs.device }} ${{ inputs.toolchain }}
+    uses: ./.github/workflows/build-kowsu.yml
+    with:
+      device: ${{ inputs.device }}
+      toolchain: ${{ inputs.toolchain }}
+      sub_level: ${{ inputs.sub_level }}
+
+  build-kowsu-susfs:
+    if: ${{ inputs.ksu_variant == 'kowsu-susfs' }}
+    name: KowSU+SuSFS ${{ inputs.device }} ${{ inputs.toolchain }}
+    uses: ./.github/workflows/build-kowsu-susfs.yml
+    with:
+      device: ${{ inputs.device }}
+      toolchain: ${{ inputs.toolchain }}
+      sub_level: ${{ inputs.sub_level }}
