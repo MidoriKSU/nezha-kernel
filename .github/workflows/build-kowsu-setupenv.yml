@@ -59,6 +59,7 @@ jobs:
           cp "${{ github.workspace }}/.github/scripts/_setup_env.sh" kernel_workspace/_setup_env.sh
           cat > kernel_workspace/build.config.gki << 'CONFEOF'
           DEFCONFIG=gki_defconfig
+LLVM=1
           CONFEOF
 
       - name: Inject Defconfig Flags
