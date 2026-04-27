@@ -1,4 +1,4 @@
-name: Build KowSU with Bazel config
+name: Build KowSU with _setup_env.sh
 
 on:
   workflow_dispatch:
@@ -49,13 +49,6 @@ jobs:
           sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
           sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion || true
 
-      - name: Init Toolchain (AOSP Clang r536225)
-        run: |
-          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o clang.tar.gz
-          mkdir -p "$GITHUB_WORKSPACE/clang-aosp" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-aosp"
-          echo "$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_PATH
-          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_ENV
-
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
@@ -71,6 +64,15 @@ jobs:
           cd kernel_workspace/common
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
 
+      - name: Inject Defconfig Flags
+        uses: ./.github/actions/kernel-config
+        with:
+          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
+          build_config_path: "kernel_workspace/common/build.config.gki"
+          variant: "kowsu"
+          device: ${{ inputs.device }}
+          enable_susfs: "false"
+
       - name: Inject Patches & KMI Bypass
         run: |
           cd kernel_workspace/common
@@ -84,59 +86,39 @@ jobs:
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
 
-      - name: Apply Bazel .config & Inject Network Configs
+      - name: Setup Build Environment
         run: |
-          cd kernel_workspace/common
-          export ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu-
-          
-          # Copy Bazel reference .config
-          cp "${{ github.workspace }}/config/bazel_config" .config
-          
-          # Inject our LOCALVERSION
-          sed -i 's|CONFIG_LOCALVERSION=.*|CONFIG_LOCALVERSION="-android16-5-g5a0e85dd9db0-ab14499855-4k"|' .config
-          
-          # Ensure KSU is enabled
-          grep -q "CONFIG_KSU=y" .config || echo "CONFIG_KSU=y" >> .config
-          grep -q "CONFIG_KPROBES=y" .config || echo "CONFIG_KPROBES=y" >> .config
-          grep -q "CONFIG_HAVE_KPROBES=y" .config || echo "CONFIG_HAVE_KPROBES=y" >> .config
-          
-          # Inject networking configs if missing
-          grep -q "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" .config || sed -i '/CONFIG_KSU/a\CONFIG_NETFILTER_XT_TARGET_TPROXY=y' .config
-          grep -q "CONFIG_TCP_CONG_BBR=y" .config || sed -i '/CONFIG_TCP_CONG_ADVANCED/a\CONFIG_TCP_CONG_BBR=y' .config
-          
-          mkdir -p out
-          cp .config out/.config
-          make O=out olddefconfig
+          cp "${{ github.workspace }}/.github/scripts/_setup_env.sh" kernel_workspace/common/_setup_env.sh
+          echo "Build environment ready"
 
-      - name: Compile Kernel
+      - name: Compile Kernel (with _setup_env.sh)
         run: |
-          cd kernel_workspace/common
-          export PATH="$GITHUB_WORKSPACE/clang-aosp/bin:$PATH"
-          export ARCH=arm64
-          export LLVM=1 LLVM_IAS=1
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export LD=ld.lld
-          export AR=llvm-ar
-          export NM=llvm-nm
-          export OBJCOPY=llvm-objcopy
-          export OBJDUMP=llvm-objdump
-          export STRIP=llvm-strip
-          export KCFLAGS="-mbranch-protection=standard -fstack-protector-strong -fno-strict-aliasing"
+          cd kernel_workspace
           
-          make -j$(nproc --all) O=out Image
+          export BUILD_CONFIG=common/build.config.gki.aarch64
+          source common/_setup_env.sh
+          
+          echo "=== Current Clang: $(which clang) ==="
+          echo "=== OUT_DIR: ${OUT_DIR} ==="
+          echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
+          
+          cd common
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          
+          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} ${DEFCONFIG}
+          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} Image
           
           echo "=== Image size ==="
-          ls -lh out/arch/arm64/boot/Image
-          echo "=== Check LOCALVERSION ==="
-          grep "CONFIG_LOCALVERSION" out/.config
-          echo "=== Check Page Size ==="
-          grep "CONFIG_ARM64_.*K_PAGES" out/.config | grep -v "^#"
-          echo "=== Check LTO ==="
-          grep "CONFIG_LTO" out/.config | grep -v "^#"
+          ls -lh ${OUT_DIR}/arch/arm64/boot/Image
 
       - name: Package
         run: |
-          IMAGE="kernel_workspace/common/out/arch/arm64/boot/Image"
+          cd kernel_workspace
+          export BUILD_CONFIG=common/build.config.gki.aarch64
+          source common/_setup_env.sh
+          
+          IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
           if [ ! -f "$IMAGE" ]; then
             echo "Image not found!"
             exit 1
@@ -146,7 +128,7 @@ jobs:
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/
           cd AnyKernel3
-          ZIP_NAME="kowsu-${{ inputs.device }}-bazelconfig-$(date +'%y%m%d').zip"
+          ZIP_NAME="kowsu-${{ inputs.device }}-setupenv-$(date +'%y%m%d').zip"
           zip -r9 "$ZIP_NAME" *
           mv "$ZIP_NAME" ../
           cd ..
@@ -155,5 +137,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: kowsu-${{ inputs.device }}-bazelconfig
+          name: kowsu-${{ inputs.device }}-setupenv
           path: ${{ env.ZIP_NAME }}
