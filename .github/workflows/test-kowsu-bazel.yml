@@ -58,6 +58,10 @@ jobs:
           rm -rf android/abi_gki_protected_exports_*
           echo "Protected exports removed"
 
+      - name: Backup original gki_defconfig
+        run: |
+          cp kernel_workspace/common/arch/arm64/configs/gki_defconfig kernel_workspace/common/arch/arm64/configs/gki_defconfig.orig
+
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
         with:
@@ -67,32 +71,38 @@ jobs:
           device: nezha
           enable_susfs: "false"
 
+      - name: Generate Fragment & Restore original defconfig
+        run: |
+          cd kernel_workspace
+          # 提取修改后的 CONFIG 行与原始版本的差异
+          grep "^CONFIG_" common/arch/arm64/configs/gki_defconfig | sort > /tmp/mod.txt
+          grep "^CONFIG_" common/arch/arm64/configs/gki_defconfig.orig | sort > /tmp/orig.txt
+          diff /tmp/orig.txt /tmp/mod.txt | grep "^>" | sed 's/^> //' > common/arch/arm64/configs/kowsu.fragment
+          diff /tmp/orig.txt /tmp/mod.txt | grep "^<" | sed 's/^< /# /' >> common/arch/arm64/configs/kowsu.fragment
+          echo "Fragment lines: $(wc -l < common/arch/arm64/configs/kowsu.fragment)"
+          # 恢复原始 defconfig
+          mv common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig
+
       - name: Delete build.sh to force Bazel
         run: |
           rm -f kernel_workspace/build/build.sh
-          echo "build.sh removed, will use Bazel"
+          echo "build.sh removed"
 
       - name: Build with Bazel
         run: |
           cd kernel_workspace
-          
-          # Copy modified defconfig as fragment for Bazel
-          cp common/arch/arm64/configs/gki_defconfig common/arch/arm64/configs/kowsu.fragment
-          
           tools/bazel build --config=release --stamp --notrim \
-            --//build/kernel/kleaf:check_defconfig=false \
+            --defconfig_fragment=//common:arch/arm64/configs/kowsu.fragment \
             //common:kernel_aarch64_dist
-            
+          
           echo "=== Find Image ==="
           find . -name "Image" -type f -ls 2>/dev/null || echo "Image not found"
-          find . -name "*.img" -type f -ls 2>/dev/null || echo "No img files"
 
       - name: Package
         run: |
           IMAGE=$(find kernel_workspace -name "Image" -type f 2>/dev/null | head -1)
           if [ -z "$IMAGE" ]; then
-            echo "Image not found, trying fallback paths..."
-            find kernel_workspace -type f | head -30
+            echo "Image not found!"
             exit 1
           fi
           ls -lh "$IMAGE"
