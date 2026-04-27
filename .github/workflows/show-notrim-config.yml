@@ -1,0 +1,35 @@
+name: Show Notrim Defconfig
+
+on:
+  workflow_dispatch:
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cache Kernel Source
+        id: cache-kernel
+        uses: actions/cache@v4
+        with:
+          path: kernel_workspace
+          key: gki-source-android16-6.12-2025-06-v2
+
+      - name: Repo Init & Sync
+        if: steps.cache-kernel.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p kernel_workspace
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+          chmod +x /usr/local/bin/repo
+          cd kernel_workspace
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
+          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
+
+      - name: Show Notrim Config
+        run: |
+          echo "=== notrim_defconfig ==="
+          cat kernel_workspace/build/kernel/kleaf/impl/defconfig/notrim_defconfig
+          
+          echo ""
+          echo "=== Also check other defconfig files ==="
+          ls kernel_workspace/build/kernel/kleaf/impl/defconfig/
