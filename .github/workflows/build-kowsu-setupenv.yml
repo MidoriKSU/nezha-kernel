@@ -39,6 +39,13 @@ jobs:
             mkdir common && tar -xf common.tar.gz -C common && rm common.tar.gz
           fi
 
+      - name: Init Toolchain (AOSP Clang)
+        run: |
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o clang.tar.gz
+          mkdir -p "$GITHUB_WORKSPACE/clang-aosp" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-aosp"
+          echo "$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_PATH
+          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_ENV
+
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
@@ -59,7 +66,7 @@ jobs:
           cp "${{ github.workspace }}/.github/scripts/_setup_env.sh" kernel_workspace/_setup_env.sh
           cat > kernel_workspace/build.config.gki << 'CONFEOF'
           DEFCONFIG=gki_defconfig
-LLVM=1
+          LLVM=1
           CONFEOF
 
       - name: Inject Defconfig Flags
@@ -93,7 +100,6 @@ LLVM=1
           
           echo "=== OUT_DIR: ${OUT_DIR} ==="
           echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
-          echo "=== KERNEL_DIR: ${KERNEL_DIR} ==="
           
           cd common
           export ARCH=arm64
