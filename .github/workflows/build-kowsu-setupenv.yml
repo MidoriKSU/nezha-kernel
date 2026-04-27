@@ -1,4 +1,4 @@
-name: Build KowSU with _setup_env.sh
+name: Build KowSU with Official GKI Method
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: KowSU ${{ inputs.device }} make
+    name: KowSU ${{ inputs.device }} Official GKI
     runs-on: ubuntu-latest
     timeout-minutes: 300
 
@@ -86,25 +86,18 @@ jobs:
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
 
-      - name: Setup Build Environment
-        run: |
-          cp "${{ github.workspace }}/.github/scripts/_setup_env.sh" kernel_workspace/common/_setup_env.sh
-          echo "Build environment ready"
-
-      - name: Compile Kernel (with _setup_env.sh)
+      - name: Compile Official GKI Kernel
         run: |
           cd kernel_workspace
-          
+          export ROOT_DIR="$(pwd)"
           export BUILD_CONFIG=common/build.config.gki.aarch64
-          source common/_setup_env.sh
           
-          echo "=== Current Clang: $(which clang) ==="
-          echo "=== OUT_DIR: ${OUT_DIR} ==="
-          echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
+          # 1. Initialize Kleaf environment (the soul of 18.7MB build)
+          source build/_setup_env.sh
           
-          # cc-wrapper for identity spoofing
+          # 2. Create cc-wrapper for identity spoofing
           REAL_CLANG="$(which clang)"
-          cat > common/cc-wrapper <<-EOF
+          cat > cc-wrapper <<-EOF
           #!/bin/bash
           if [[ "\$*" == *"--version"* ]]; then
               echo "Android (14043575, +pgo, +bolt, +lto, +mlgo, based on r536225) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project b3a530ec6537146650e42be89f1089e9a3588460), LLD 19.0.1"
@@ -112,35 +105,35 @@ jobs:
           fi
           exec "$REAL_CLANG" "\$@"
           EOF
-          chmod +x common/cc-wrapper
-          export CC="$(pwd)/common/cc-wrapper"
+          chmod +x cc-wrapper
+          export CC="$(pwd)/cc-wrapper"
           
           cd common
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export KCFLAGS="-mbranch-protection=standard -fstack-protector-strong"
           
-          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} KCFLAGS="$KCFLAGS" ${DEFCONFIG}
+          echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
+          echo "=== Current Clang: ${REAL_CLANG} ==="
           
-          # Force 4K pages for device compatibility
-          ${OUT_DIR}/scripts/config --file ${OUT_DIR}/.config \
-            --enable CONFIG_ARM64_4K_PAGES \
-            --disable CONFIG_ARM64_16K_PAGES \
-            --disable CONFIG_ARM64_64K_PAGES
-          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} olddefconfig
+          # 3. Generate config
+          make -j$(nproc --all) O=out ${TOOL_ARGS} KCFLAGS="$KCFLAGS" gki_defconfig
           
-          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} KCFLAGS="$KCFLAGS" Image
+          # 4. Force 4K pages for device compatibility
+          scripts/config --file out/.config -e CONFIG_ARM64_4K_PAGES
+          scripts/config --file out/.config -d CONFIG_ARM64_16K_PAGES
+          scripts/config --file out/.config -d CONFIG_ARM64_64K_PAGES
+          make -j$(nproc --all) O=out ${TOOL_ARGS} olddefconfig
+          
+          # 5. Build
+          make -j$(nproc --all) O=out ${TOOL_ARGS} KCFLAGS="$KCFLAGS" Image
           
           echo "=== Image size ==="
-          ls -lh ${OUT_DIR}/arch/arm64/boot/Image
+          ls -lh out/arch/arm64/boot/Image
 
       - name: Package
         run: |
-          cd kernel_workspace
-          export BUILD_CONFIG=common/build.config.gki.aarch64
-          source common/_setup_env.sh
-          
-          IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
+          IMAGE="kernel_workspace/common/out/arch/arm64/boot/Image"
           if [ ! -f "$IMAGE" ]; then
             echo "Image not found!"
             exit 1
@@ -150,7 +143,7 @@ jobs:
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/
           cd AnyKernel3
-          ZIP_NAME="kowsu-${{ inputs.device }}-setupenv-$(date +'%y%m%d').zip"
+          ZIP_NAME="kowsu-${{ inputs.device }}-official-$(date +'%y%m%d').zip"
           zip -r9 "$ZIP_NAME" *
           mv "$ZIP_NAME" ../
           cd ..
@@ -159,5 +152,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: kowsu-${{ inputs.device }}-setupenv
+          name: kowsu-${{ inputs.device }}-official
           path: ${{ env.ZIP_NAME }}
