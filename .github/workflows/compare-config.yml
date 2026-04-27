@@ -34,26 +34,9 @@ jobs:
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
 
-      - name: Backup original gki_defconfig (for Bazel)
+      - name: Copy Fragment for Bazel
         run: |
-          cp kernel_workspace/common/arch/arm64/configs/gki_defconfig kernel_workspace/common/arch/arm64/configs/gki_defconfig.orig
-
-      - name: Inject Defconfig Flags (for Bazel fragment)
-        uses: ./.github/actions/kernel-config
-        with:
-          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
-          build_config_path: "kernel_workspace/common/build.config.gki"
-          variant: "kowsu"
-          device: nezha
-          enable_susfs: "false"
-
-      - name: Generate Fragment & Restore
-        run: |
-          cd kernel_workspace
-          diff common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > common/arch/arm64/configs/nezha_gki.fragment || true
-          cp common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig
-          echo "=== Fragment ==="
-          cat common/arch/arm64/configs/nezha_gki.fragment
+          cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
 
       - name: Generate Bazel .config
         run: |
