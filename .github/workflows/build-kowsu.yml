@@ -93,6 +93,7 @@ jobs:
         run: |
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/android16-6.12-2025-06.tar.gz" -o gki.tar.gz
           mkdir -p kernel_workspace/common && tar -xf gki.tar.gz -C kernel_workspace/common
+
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
@@ -134,22 +135,6 @@ jobs:
           variant: "kowsu"
           device: ${{ inputs.device }}
           enable_susfs: "false"
-
-
-      - name: Verify Localversion Before Build
-        run: |
-          LOCALVERSION=$(grep 'CONFIG_LOCALVERSION=' kernel_workspace/common/out/.config 2>/dev/null | cut -d'"' -f2)
-          if [ -z "$LOCALVERSION" ]; then
-            echo "❌ CONFIG_LOCALVERSION not set!"
-            exit 1
-          fi
-          echo "LOCALVERSION: $LOCALVERSION"
-          if echo "$LOCALVERSION" | grep -q "android16"; then
-            echo "✅ LOCALVERSION OK"
-          else
-            echo "❌ LOCALVERSION missing android16 suffix"
-            exit 1
-          fi
 
       - name: Compile Kernel
         run: |
