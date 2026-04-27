@@ -147,19 +147,19 @@ jobs:
         run: |
           cd kernel_workspace
           
-          IMAGE="$(find out/bazel/output_user_root -name "Image" -type f | grep "dist" | head -n 1)"
+          echo "Searching for compiled Image..."
+          IMAGE="$(find -L bazel-bin/ -name "Image" -type f | grep "kernel_aarch64" | head -n 1)"
+          
           if [ -z "$IMAGE" ]; then
-             IMAGE="out/bazel/output_user_root/*/execroot/_main/bazel-out/k8-fastbuild/bin/common/kernel_aarch64/Image"
+             echo "Trying deep fallback search..."
+             IMAGE="$(find -L . -name "Image" -type f | grep -v "AnyKernel3" | head -n 1)"
           fi
           
-          if [ -f "out/android16-6.12/dist/Image" ]; then
-            IMAGE="out/android16-6.12/dist/Image"
-          fi
-          
+          echo "Target Image located at: $IMAGE"
           [ -f "$IMAGE" ] || (echo "Binary Missing!" && exit 1)
           
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
-          cp "$IMAGE" ./AnyKernel3/ && cd AnyKernel3
+          cp "$IMAGE" ./AnyKernel3/Image && cd AnyKernel3
           
           ZIP_NAME="MidoriSU_kernel-android16-6.12.${{ github.event.inputs.sub_level || inputs.sub_level }}-SuSFS.zip"
           
