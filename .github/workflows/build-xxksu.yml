@@ -227,10 +227,13 @@ jobs:
           [ -f "$IMAGE" ] || (echo "Image binary missing!" && exit 1)
 
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
-          cp "$IMAGE" ./AnyKernel3/ && cd AnyKernel3
+          cp "$IMAGE" ./AnyKernel3/
+          cd AnyKernel3
 
           ZIP_NAME="xxksu-r${{ env.KSU_VERSION }}-${{ inputs.device }}-${{ inputs.toolchain }}.zip"
-          zip -r9 "../$ZIP_NAME" *
+          zip -r9 "$ZIP_NAME" *
+          mv "$ZIP_NAME" ../
+          cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload Artifact
