@@ -1,0 +1,59 @@
+name: Show Bazel TOOL_ARGS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends aria2 curl
+
+      - name: Cache Kernel Source
+        id: cache-kernel
+        uses: actions/cache@v4
+        with:
+          path: kernel_workspace
+          key: gki-source-android16-6.12-2025-06-v2
+
+      - name: Repo Init & Sync
+        if: steps.cache-kernel.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p kernel_workspace
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+          chmod +x /usr/local/bin/repo
+          cd kernel_workspace
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
+          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
+          sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
+
+      - name: Copy Fragment
+        run: |
+          cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
+
+      - name: Extract TOOL_ARGS and Build Env
+        run: |
+          cd kernel_workspace
+          
+          echo "=== kernel_aarch64_env.sh (contains TOOL_ARGS) ==="
+          # 用 bazel build 生成 env 文件，然后查看
+          tools/bazel build --config=release --stamp --notrim \
+            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
+            //common:kernel_aarch64_env 2>&1 | tail -20
+          
+          echo ""
+          echo "=== Env file content ==="
+          find bazel-bin -name "kernel_aarch64_env.sh" -type f 2>/dev/null | head -1 | xargs cat 2>/dev/null | head -100
+          
+          echo ""
+          echo "=== Also check build_utils.sh ==="
+          cat build/kernel/build_utils.sh 2>/dev/null | grep -E "TOOL_ARGS|CC|CLANG|LTO|TRIM" | head -30
+
