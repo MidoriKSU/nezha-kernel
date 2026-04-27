@@ -43,17 +43,12 @@ jobs:
         run: |
           cd kernel_workspace
           
-          echo "=== kernel_aarch64_env.sh (contains TOOL_ARGS) ==="
-          # 用 bazel build 生成 env 文件，然后查看
-          tools/bazel build --config=release --stamp --notrim \
-            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
-            //common:kernel_aarch64_env 2>&1 | tail -20
-          
-          echo ""
-          echo "=== Env file content ==="
-          find bazel-bin -name "kernel_aarch64_env.sh" -type f 2>/dev/null | head -1 | xargs cat 2>/dev/null | head -100
-          
-          echo ""
-          echo "=== Also check build_utils.sh ==="
-          cat build/kernel/build_utils.sh 2>/dev/null | grep -E "TOOL_ARGS|CC|CLANG|LTO|TRIM" | head -30
+          echo "=== kernel_aarch64_env.sh ==="
+          if [ -f "bazel-bin/common/kernel_aarch64_env.sh" ]; then
+            cat bazel-bin/common/kernel_aarch64_env.sh
+          else
+            echo "Not a regular file, trying to read..."
+            ls -la bazel-bin/common/kernel_aarch64_env.sh 2>/dev/null || echo "file not found"
+            find bazel-bin -name "kernel_aarch64_env*" -type f -o -type l 2>/dev/null | head -10
+          fi
 
