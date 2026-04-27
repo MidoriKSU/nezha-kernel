@@ -53,7 +53,7 @@ jobs:
       - name: Generate Bazel .config
         run: |
           cd kernel_workspace
-          tools/bazel build --config=fast --lto=none --notrim \
+          tools/bazel build --config=release --stamp --notrim \
             --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
             //common:kernel_aarch64_config
           cp bazel-bin/common/kernel_aarch64_config/out_dir/.config ${{ github.workspace }}/bazel_config
