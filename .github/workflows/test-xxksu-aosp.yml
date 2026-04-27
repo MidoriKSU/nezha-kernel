@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    name: xxKSU nezha test cctv18 method
+    name: xxKSU nezha test
     runs-on: ubuntu-latest
     timeout-minutes: 300
 
@@ -41,7 +41,6 @@ jobs:
           ln -sf ../KernelSU/kernel drivers/kernelsu
           grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
           grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
-
           cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
           echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
           mkdir -p include/uapi
@@ -54,6 +53,12 @@ jobs:
         run: |
           cd kernel_workspace/common
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
+
+      - name: Remove Protected Exports
+        run: |
+          cd kernel_workspace/common
+          rm -rf android/abi_gki_protected_exports_*
+          echo "Protected exports removed"
 
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
@@ -69,7 +74,6 @@ jobs:
           WORKDIR="$(pwd)"
           REAL_CLANG="${{ env.CLANG_BIN }}/clang"
           export PATH="${{ env.CLANG_BIN }}:$PATH"
-
           cd kernel_workspace/common
 
           cat > cc-wrapper <<-EOF
@@ -86,8 +90,7 @@ jobs:
           export KBUILD_BUILD_HOST="build-host"
           export KBUILD_BUILD_TIMESTAMP="Fri Sep 12 04:57:41 UTC 2025"
           export ARCH=arm64
-          export LLVM=1
-          export LLVM_IAS=1
+          export LLVM=1 LLVM_IAS=1
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC="$(pwd)/cc-wrapper"
           export LD="${{ env.CLANG_BIN }}/ld.lld"
@@ -99,11 +102,9 @@ jobs:
         run: |
           cd kernel_workspace
           IMAGE="./common/out/arch/arm64/boot/Image"
-          [ -f "$IMAGE" ] || (echo " Image binary missing!" && exit 1)
-
+          [ -f "$IMAGE" ] || (echo "Image binary missing!" && exit 1)
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/ && cd AnyKernel3
-
           BUILD_DATE="$(date +'%y%m%d')"
           ZIP_NAME="xxksu-nezha-test-${BUILD_DATE}.zip"
           zip -r9 "../$ZIP_NAME" *
