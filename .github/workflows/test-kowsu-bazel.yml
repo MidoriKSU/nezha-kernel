@@ -74,35 +74,38 @@ jobs:
       - name: Generate Fragment & Restore original defconfig
         run: |
           cd kernel_workspace
-          # 提取修改后的 CONFIG 行与原始版本的差异
-          grep "^CONFIG_" common/arch/arm64/configs/gki_defconfig | sort > /tmp/mod.txt
-          grep "^CONFIG_" common/arch/arm64/configs/gki_defconfig.orig | sort > /tmp/orig.txt
-          diff /tmp/orig.txt /tmp/mod.txt | grep "^>" | sed 's/^> //' > common/arch/arm64/configs/kowsu.fragment
-          diff /tmp/orig.txt /tmp/mod.txt | grep "^<" | sed 's/^< /# /' >> common/arch/arm64/configs/kowsu.fragment
-          echo "Fragment lines: $(wc -l < common/arch/arm64/configs/kowsu.fragment)"
-          # 恢复原始 defconfig
-          mv common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig
+          # 参照 WildKernels 的方法：diff 提取增量
+          diff common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > common/arch/arm64/configs/ksu.fragment || true
+          cp common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig
+          echo "=== Fragment lines: $(wc -l < common/arch/arm64/configs/ksu.fragment) ==="
+          cat common/arch/arm64/configs/ksu.fragment
 
-      - name: Delete build.sh to force Bazel
+      - name: Configure build.config for Bazel
         run: |
-          rm -f kernel_workspace/build/build.sh
-          echo "build.sh removed"
+          cd kernel_workspace
+          # 参照他们的方法：sed 修改 build.config.gki.aarch64
+          sed -i 's/BUILD_SYSTEM_DLKM=1/BUILD_SYSTEM_DLKM=0/' common/build.config.gki.aarch64
+          sed -i '/MODULES_ORDER=android\/gki_aarch64_modules/d' common/build.config.gki.aarch64
+          sed -i '/KMI_SYMBOL_LIST_STRICT_MODE/d' common/build.config.gki.aarch64
 
       - name: Build with Bazel
         run: |
           cd kernel_workspace
-          tools/bazel build --config=release --stamp --notrim \
-            --defconfig_fragment=//common:arch/arm64/configs/kowsu.fragment \
-            //common:kernel_aarch64_dist
+          # 参照他们的准确命令：--lto=none, --disk_cache
+          LTO_FLAG="--lto=none"
+          FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
+          
+          tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist
           
           echo "=== Find Image ==="
-          find . -name "Image" -type f -ls 2>/dev/null || echo "Image not found"
+          find . -path "*/kernel_aarch64/Image" -type f -ls 2>/dev/null || echo "Image not found"
 
       - name: Package
         run: |
-          IMAGE=$(find kernel_workspace -name "Image" -type f 2>/dev/null | head -1)
+          IMAGE=$(find kernel_workspace -path "*/kernel_aarch64/Image" -type f 2>/dev/null | head -1)
           if [ -z "$IMAGE" ]; then
             echo "Image not found!"
+            find kernel_workspace -name "Image" -type f -ls
             exit 1
           fi
           ls -lh "$IMAGE"
