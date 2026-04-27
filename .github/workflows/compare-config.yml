@@ -33,15 +33,27 @@ jobs:
           cd kernel_workspace
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
+          sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
+          sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion || true
 
-      - name: Copy Fragment for Bazel
+      - name: Setup KowSU
+        run: |
+          cd kernel_workspace/common
+          git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+      - name: Copy Bazel Fragment
         run: |
           cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
+          echo "=== Fragment ==="
+          cat kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
 
       - name: Generate Bazel .config
         run: |
           cd kernel_workspace
-          tools/bazel build --lto=none --notrim \
+          tools/bazel build --config=fast --lto=none --notrim \
             --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
             //common:kernel_aarch64_config
           cp bazel-bin/common/kernel_aarch64_config/out_dir/.config ${{ github.workspace }}/bazel_config
