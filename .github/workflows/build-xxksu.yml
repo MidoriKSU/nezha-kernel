@@ -151,9 +151,6 @@ jobs:
           device: ${{ inputs.device }}
           enable_susfs: "false"
 
-      - name: Fix Localversion
-        run: |
-          echo 'echo ""' > kernel_workspace/common/scripts/setlocalversion
 
       - name: Compile Kernel
         run: |
