@@ -62,9 +62,18 @@ jobs:
           enable_susfs: "false"
 
 
+      - name: Init Toolchain (AOSP Clang)
+        run: |
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o clang.tar.gz
+          mkdir -p "$GITHUB_WORKSPACE/clang-aosp" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-aosp"
+          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_PATH
+
       - name: Generate Make .config
         run: |
           cd kernel_workspace/common
+          export CLANG_BIN="${{ env.CLANG_BIN }}"
+          export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu-
           make -j$(nproc --all) O=out gki_defconfig
           make -j$(nproc --all) O=out olddefconfig
