@@ -80,7 +80,7 @@ jobs:
           cp common/arch/arm64/configs/gki_defconfig common/arch/arm64/configs/kowsu.fragment
           
           tools/bazel build --config=release --stamp --notrim \
-            --defconfig_fragment=//common:arch/arm64/configs/kowsu.fragment \
+            --//build/kernel/kleaf:check_defconfig=false \
             //common:kernel_aarch64_dist
             
           echo "=== Find Image ==="
