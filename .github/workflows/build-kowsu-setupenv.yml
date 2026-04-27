@@ -46,6 +46,8 @@ jobs:
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
           if [ ! -d "KernelSU" ]; then
             git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
             ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -56,6 +58,8 @@ jobs:
       - name: Apply SYSVIPC KABI Fix
         run: |
           cd kernel_workspace/common
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
 
       - name: Inject Defconfig Flags
@@ -70,6 +74,8 @@ jobs:
       - name: Inject Patches & KMI Bypass
         run: |
           cd kernel_workspace/common
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
           sed -i '1a export KBUILD_BUILD_USER="kleaf"' scripts/mkcompile_h
           sed -i '1a export KBUILD_BUILD_HOST="build-host"' scripts/mkcompile_h
           sed -i '1a export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"' scripts/mkcompile_h
@@ -83,6 +89,8 @@ jobs:
       - name: Compile Official GKI Kernel
         run: |
           cd kernel_workspace
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
           
           # Create cc-wrapper for identity spoofing
           REAL_CLANG="$(which clang)"
