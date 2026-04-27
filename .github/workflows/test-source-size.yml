@@ -1,0 +1,40 @@
+name: Test Source Size
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Google Source Size
+        run: |
+          echo "=== Google Official tar.gz ==="
+          curl -sI -L "https://android.googlesource.com/kernel/common/+archive/refs/heads/android16-6.12-2025-06.tar.gz" | grep -i content-length || echo "no content-length header"
+          
+      - name: Check cctv18 Source Size
+        run: |
+          echo "=== cctv18 GitHub zip ==="
+          curl -sI -L "https://github.com/cctv18/android_gki_kernel_common/archive/refs/heads/android16-6.12-2025-06.zip" | grep -i content-length || echo "no content-length header"
+          
+      - name: Download Both & Compare
+        run: |
+          echo "=== Downloading Google ==="
+          curl -Lo /tmp/google.tar.gz "https://android.googlesource.com/kernel/common/+archive/refs/heads/android16-6.12-2025-06.tar.gz"
+          GOOGLE_SIZE=$(stat -c%s /tmp/google.tar.gz)
+          echo "Google size: $GOOGLE_SIZE bytes ($((GOOGLE_SIZE/1024/1024))MB)"
+          
+          echo "=== Downloading cctv18 ==="
+          curl -Lo /tmp/cctv18.zip "https://github.com/cctv18/android_gki_kernel_common/archive/refs/heads/android16-6.12-2025-06.zip"
+          CCTV18_SIZE=$(stat -c%s /tmp/cctv18.zip)
+          echo "cctv18 size: $CCTV18_SIZE bytes ($((CCTV18_SIZE/1024/1024))MB)"
+          
+          echo "=== Difference ==="
+          DIFF=$((CCTV18_SIZE - GOOGLE_SIZE))
+          echo "Difference: $DIFF bytes ($((DIFF/1024/1024))MB)"
+          echo "cctv18 is $((CCTV18_SIZE * 100 / GOOGLE_SIZE))% of Google"
+          
+          echo "=== Listing Google tar.gz contents count ==="
+          tar -tzf /tmp/google.tar.gz | wc -l
+          echo "=== Listing cctv18 zip contents count ==="
+          unzip -l /tmp/cctv18.zip | tail -1
