@@ -1,4 +1,4 @@
-name: Build KowSU with Official GKI Method
+name: Build KowSU Official GKI Method
 
 on:
   workflow_dispatch:
@@ -30,24 +30,22 @@ jobs:
             binutils python-is-python3 libssl-dev libelf-dev libdw-dev \
             curl bison flex make git perl gcc bc zip unzip aria2
 
-      - name: Cache Kernel Source
-        id: cache-kernel
-        uses: actions/cache@v4
-        with:
-          path: kernel_workspace
-          key: gki-source-android16-6.12-2025-06-v2
-
-      - name: Repo Init & Sync GKI Kernel
-        if: steps.cache-kernel.outputs.cache-hit != 'true'
+      - name: Download Official Build Scripts
         run: |
-          mkdir -p kernel_workspace
-          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
-          chmod +x /usr/local/bin/repo
-          cd kernel_workspace
-          repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
-          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
-          sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
-          sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion || true
+          mkdir -p kernel_workspace/build
+          aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/build/+archive/refs/heads/android16-6.12.tar.gz" -o kernel_workspace/build.tar.gz
+          tar -xzf kernel_workspace/build.tar.gz -C kernel_workspace/build
+          rm kernel_workspace/build.tar.gz
+          echo "Build scripts downloaded"
+
+      - name: Download Official Kernel Source
+        run: |
+          mkdir -p kernel_workspace/common
+          aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/heads/android16-6.12.tar.gz" -o kernel_workspace/common.tar.gz
+          tar -xzf kernel_workspace/common.tar.gz -C kernel_workspace/common
+          rm kernel_workspace/common.tar.gz
+          sed -i 's/ -dirty//g' kernel_workspace/common/scripts/setlocalversion
+          echo "Kernel source downloaded"
 
       - name: Setup KowSU
         run: |
@@ -92,10 +90,16 @@ jobs:
           export ROOT_DIR="$(pwd)"
           export BUILD_CONFIG=common/build.config.gki.aarch64
           
-          # 1. Initialize Kleaf environment (the soul of 18.7MB build)
-          source build/kernel/_setup_env.sh
+          # Check and source _setup_env.sh
+          if [ -f "build/_setup_env.sh" ]; then
+            source build/_setup_env.sh
+          else
+            echo "ERROR: build/_setup_env.sh not found!"
+            find . -name "_setup_env.sh" -maxdepth 3
+            exit 1
+          fi
           
-          # 2. Create cc-wrapper for identity spoofing
+          # Create cc-wrapper for identity spoofing
           REAL_CLANG="$(which clang)"
           cat > cc-wrapper <<-EOF
           #!/bin/bash
@@ -116,16 +120,17 @@ jobs:
           echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
           echo "=== Current Clang: ${REAL_CLANG} ==="
           
-          # 3. Generate config
+          # Generate config
           make -j$(nproc --all) O=out ${TOOL_ARGS} KCFLAGS="$KCFLAGS" gki_defconfig
           
-          # 4. Force 4K pages for device compatibility
+          # Force 4K pages and enable KSU
+          scripts/config --file out/.config -e CONFIG_KSU
           scripts/config --file out/.config -e CONFIG_ARM64_4K_PAGES
           scripts/config --file out/.config -d CONFIG_ARM64_16K_PAGES
           scripts/config --file out/.config -d CONFIG_ARM64_64K_PAGES
           make -j$(nproc --all) O=out ${TOOL_ARGS} olddefconfig
           
-          # 5. Build
+          # Build
           make -j$(nproc --all) O=out ${TOOL_ARGS} KCFLAGS="$KCFLAGS" Image
           
           echo "=== Image size ==="
