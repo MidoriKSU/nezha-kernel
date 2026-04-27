@@ -1,4 +1,4 @@
-name: Test KowSU (repo init + Bazel)
+name: Test KowSU (Bazel + nezha fragment)
 
 on:
   workflow_dispatch:
@@ -58,32 +58,14 @@ jobs:
           rm -rf android/abi_gki_protected_exports_*
           echo "Protected exports removed"
 
-      - name: Backup original gki_defconfig
+      - name: Copy nezha fragment
         run: |
-          cp kernel_workspace/common/arch/arm64/configs/gki_defconfig kernel_workspace/common/arch/arm64/configs/gki_defconfig.orig
-
-      - name: Inject Defconfig Flags
-        uses: ./.github/actions/kernel-config
-        with:
-          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
-          build_config_path: "kernel_workspace/common/build.config.gki"
-          variant: "kowsu"
-          device: nezha
-          enable_susfs: "false"
-
-      - name: Generate Fragment & Restore original defconfig
-        run: |
-          cd kernel_workspace
-          # 参照 WildKernels 的方法：diff 提取增量
-          diff common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > common/arch/arm64/configs/ksu.fragment || true
-          cp common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig
-          echo "=== Fragment lines: $(wc -l < common/arch/arm64/configs/ksu.fragment) ==="
-          cat common/arch/arm64/configs/ksu.fragment
+          cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
+          echo "Fragment copied"
 
       - name: Configure build.config for Bazel
         run: |
           cd kernel_workspace
-          # 参照他们的方法：sed 修改 build.config.gki.aarch64
           sed -i 's/BUILD_SYSTEM_DLKM=1/BUILD_SYSTEM_DLKM=0/' common/build.config.gki.aarch64
           sed -i '/MODULES_ORDER=android\/gki_aarch64_modules/d' common/build.config.gki.aarch64
           sed -i '/KMI_SYMBOL_LIST_STRICT_MODE/d' common/build.config.gki.aarch64
@@ -91,11 +73,9 @@ jobs:
       - name: Build with Bazel
         run: |
           cd kernel_workspace
-          # 参照他们的准确命令：--lto=none, --disk_cache
-          LTO_FLAG="--lto=none"
-          FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
-          
-          tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist
+          tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=none \
+            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
+            //common:kernel_aarch64_dist
           
           echo "=== Find Image ==="
           find . -path "*/kernel_aarch64/Image" -type f -ls 2>/dev/null || echo "Image not found"
@@ -105,7 +85,6 @@ jobs:
           IMAGE=$(find kernel_workspace -path "*/kernel_aarch64/Image" -type f 2>/dev/null | head -1)
           if [ -z "$IMAGE" ]; then
             echo "Image not found!"
-            find kernel_workspace -name "Image" -type f -ls
             exit 1
           fi
           ls -lh "$IMAGE"
