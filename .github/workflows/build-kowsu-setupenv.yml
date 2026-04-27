@@ -63,10 +63,10 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          # Copy _setup_env.sh and build.config.gki
+          # Copy _setup_env.sh and build.config
           cp "${{ github.workspace }}/.github/scripts/_setup_env.sh" kernel_workspace/_setup_env.sh
           
-          cat > kernel_workspace/build.config.gki << 'CONFEOF'
+          cat > kernel_workspace/build.config << 'CONFEOF'
           DEFCONFIG=gki_defconfig
           POST_DEFCONFIG_CMDS="check_defconfig"
           CONFEOF
