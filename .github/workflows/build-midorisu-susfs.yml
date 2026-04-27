@@ -1,6 +1,12 @@
 name: Build MidoriSU with SuSFS (Google Official Source)
 
 on:
+  workflow_dispatch:
+    inputs:
+      sub_level:
+        description: 'Kernel Sub Level'
+        required: true
+        default: '23'
   workflow_call:
     inputs:
       sub_level:
