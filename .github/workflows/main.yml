@@ -12,12 +12,12 @@ on:
           - zyc-clang
 
 jobs:
-  build-xxksu:
-    name: xxKSU nezha ${{ inputs.toolchain }}
+#  build-xxksu:
+#    name: xxKSU nezha ${{ inputs.toolchain }}
 #    uses: ./.github/workflows/build-xxksu.yml
-    with:
-      device: nezha
-      toolchain: ${{ inputs.toolchain }}
+#    with:
+#      device: nezha
+#      toolchain: ${{ inputs.toolchain }}
 
   build-kowsu:
     name: KowSU nezha ${{ inputs.toolchain }}
@@ -26,15 +26,15 @@ jobs:
       device: nezha
       toolchain: ${{ inputs.toolchain }}
 
-  build-kowsu-susfs:
-    name: KowSU+SuSFS nezha ${{ inputs.toolchain }}
+#  build-kowsu-susfs:
+#    name: KowSU+SuSFS nezha ${{ inputs.toolchain }}
 #    uses: ./.github/workflows/build-kowsu-susfs.yml
-    with:
-      device: nezha
-      toolchain: ${{ inputs.toolchain }}
+#    with:
+#      device: nezha
+#      toolchain: ${{ inputs.toolchain }}
 
   release:
-    needs: [build-xxksu, build-kowsu, build-kowsu-susfs]
+    needs: [build-kowsu]
     if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     uses: ./.github/workflows/release.yml
     with:
