@@ -1,0 +1,100 @@
+name: Compare Bazel vs Make .config
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends aria2 curl
+
+      - name: Cache Kernel Source
+        id: cache-kernel
+        uses: actions/cache@v4
+        with:
+          path: kernel_workspace
+          key: gki-source-android16-6.12-2025-06-v2
+
+      - name: Repo Init & Sync
+        if: steps.cache-kernel.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p kernel_workspace
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+          chmod +x /usr/local/bin/repo
+          cd kernel_workspace
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
+          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
+
+      - name: Backup original gki_defconfig (for Bazel)
+        run: |
+          cp kernel_workspace/common/arch/arm64/configs/gki_defconfig kernel_workspace/common/arch/arm64/configs/gki_defconfig.orig
+
+      - name: Inject Defconfig Flags (for Bazel fragment)
+        uses: ./.github/actions/kernel-config
+        with:
+          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
+          build_config_path: "kernel_workspace/common/build.config.gki"
+          variant: "kowsu"
+          device: nezha
+          enable_susfs: "false"
+
+      - name: Generate Fragment & Restore
+        run: |
+          cd kernel_workspace
+          diff common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > common/arch/arm64/configs/nezha_gki.fragment || true
+          cp common/arch/arm64/configs/gki_defconfig.orig common/arch/arm64/configs/gki_defconfig
+          echo "=== Fragment ==="
+          cat common/arch/arm64/configs/nezha_gki.fragment
+
+      - name: Generate Bazel .config
+        run: |
+          cd kernel_workspace
+          tools/bazel run //common:kernel_aarch64_config -- \
+            --lto=none --notrim \
+            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment
+          cp out/kernel_aarch64/common/.config ${{ github.workspace }}/bazel_config
+
+      - name: Inject Defconfig Flags (for Make)
+        uses: ./.github/actions/kernel-config
+        with:
+          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
+          build_config_path: "kernel_workspace/common/build.config.gki"
+          variant: "kowsu"
+          device: nezha
+          enable_susfs: "false"
+
+      - name: Generate Make .config
+        run: |
+          cd kernel_workspace/common
+          export ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu-
+          make -j$(nproc --all) O=out gki_defconfig
+          make -j$(nproc --all) O=out olddefconfig
+          cp out/.config ${{ github.workspace }}/make_config
+
+      - name: Diff Configs
+        run: |
+          echo "=== Lines in Bazel: $(wc -l < ${{ github.workspace }}/bazel_config) ==="
+          echo "=== Lines in Make: $(wc -l < ${{ github.workspace }}/make_config) ==="
+          echo ""
+          echo "=== Only in Bazel ==="
+          diff ${{ github.workspace }}/make_config ${{ github.workspace }}/bazel_config | grep "^>" | head -80
+          echo ""
+          echo "=== Only in Make ==="
+          diff ${{ github.workspace }}/make_config ${{ github.workspace }}/bazel_config | grep "^<" | head -80
+
+      - name: Upload Configs
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: kernel-configs
+          path: |
+            ${{ github.workspace }}/bazel_config
+            ${{ github.workspace }}/make_config
