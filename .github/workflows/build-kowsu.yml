@@ -136,6 +136,21 @@ jobs:
           enable_susfs: "false"
 
 
+      - name: Verify Localversion Before Build
+        run: |
+          LOCALVERSION=$(grep 'CONFIG_LOCALVERSION=' kernel_workspace/common/out/.config 2>/dev/null | cut -d'"' -f2)
+          if [ -z "$LOCALVERSION" ]; then
+            echo "❌ CONFIG_LOCALVERSION not set!"
+            exit 1
+          fi
+          echo "LOCALVERSION: $LOCALVERSION"
+          if echo "$LOCALVERSION" | grep -q "android16"; then
+            echo "✅ LOCALVERSION OK"
+          else
+            echo "❌ LOCALVERSION missing android16 suffix"
+            exit 1
+          fi
+
       - name: Compile Kernel
         run: |
           CLANG_BIN="${{ env.CLANG_BIN }}"
