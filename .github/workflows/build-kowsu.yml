@@ -209,6 +209,7 @@ jobs:
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
             CROSS_COMPILE="$CROSS_COMPILE" $CROSS_COMPILE_EXTRA \
             gki_defconfig
+          LOCALVERSION_BUILT=$(grep "CONFIG_LOCALVERSION=" out/.config | cut -d""" -f2) && echo "LOCALVERSION=$LOCALVERSION_BUILT" && if ! echo "$LOCALVERSION_BUILT" | grep -q "android16"; then echo "❌ LOCALVERSION missing android16" && exit 1; else echo "✅ LOCALVERSION OK"; fi
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
