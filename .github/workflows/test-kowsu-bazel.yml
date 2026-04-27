@@ -39,6 +39,7 @@ jobs:
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
           sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion
+          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" build/kernel/kleaf/impl/stamp.bzl || true
 
       - name: Setup KowSU
         run: |
