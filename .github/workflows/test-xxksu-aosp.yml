@@ -1,4 +1,4 @@
-name: Test xxKSU AOSP
+name: Test xxKSU AOSP (repo init)
 
 on:
   workflow_dispatch:
@@ -22,17 +22,23 @@ jobs:
             binutils python-is-python3 libssl-dev libelf-dev libdw-dev \
             curl bison flex make git perl gcc bc zip unzip aria2
 
-      - name: Initialize Workspace & Toolchains
+      - name: Repo Init & Sync GKI Kernel
         run: |
-          mkdir -p kernel_workspace && cd kernel_workspace
-          aria2c -s16 -x16 -k1M https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/android16-6.12-2025-06.tar.gz -o common.tar.gz
-          mkdir common && tar -xf common.tar.gz -C common && rm common.tar.gz
+          mkdir -p kernel_workspace
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+          chmod +x /usr/local/bin/repo
+          cd kernel_workspace
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1 --partial-clone --clone-filter=blob:limit=10M
+          repo sync -c -j$(nproc --all) --fail-fast --no-tags --force-sync --no-clone-bundle
+          sed -i 's/ -dirty//g' common/scripts/setlocalversion
+
+      - name: Init Toolchain (AOSP Clang)
+        run: |
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o clang.tar.gz
           mkdir -p "$GITHUB_WORKSPACE/clang-aosp" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-aosp"
           echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_ENV
           "$GITHUB_WORKSPACE/clang-aosp/bin/clang" --version | head -1
           "$GITHUB_WORKSPACE/clang-aosp/bin/ld.lld" --version | head -1
-          sed -i 's/ -dirty//g' common/scripts/setlocalversion
 
       - name: Setup xxKSU
         run: |
@@ -106,12 +112,12 @@ jobs:
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/ && cd AnyKernel3
           BUILD_DATE="$(date +'%y%m%d')"
-          ZIP_NAME="xxksu-nezha-test-${BUILD_DATE}.zip"
+          ZIP_NAME="xxksu-nezha-repo-test-${BUILD_DATE}.zip"
           zip -r9 "../$ZIP_NAME" *
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: xxksu-test
+          name: xxksu-repo-test
           path: kernel_workspace/${{ env.ZIP_NAME }}
