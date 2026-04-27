@@ -33,22 +33,13 @@ jobs:
           cd kernel_workspace
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
-          sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
 
-      - name: Copy Fragment
-        run: |
-          cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
-
-      - name: Extract TOOL_ARGS and Build Env
+      - name: Show TOOL_ARGS
         run: |
           cd kernel_workspace
+          echo "=== Grep TOOL_ARGS ==="
+          grep -rn "TOOL_ARGS" build/ common/build.config.gki* 2>/dev/null | head -30
           
-          echo "=== kernel_aarch64_env.sh ==="
-          if [ -f "bazel-bin/common/kernel_aarch64_env.sh" ]; then
-            cat bazel-bin/common/kernel_aarch64_env.sh
-          else
-            echo "Not a regular file, trying to read..."
-            ls -la bazel-bin/common/kernel_aarch64_env.sh 2>/dev/null || echo "file not found"
-            find bazel-bin -name "kernel_aarch64_env*" -type f -o -type l 2>/dev/null | head -10
-          fi
-
+          echo ""
+          echo "=== Full build_utils.sh ==="
+          cat build/kernel/build_utils.sh 2>/dev/null | head -50
