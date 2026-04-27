@@ -58,10 +58,11 @@ jobs:
       - name: Generate Bazel .config
         run: |
           cd kernel_workspace
-          tools/bazel run //common:kernel_aarch64_config -- \
-            --lto=none --notrim \
-            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment
-          cp out/kernel_aarch64/common/.config ${{ github.workspace }}/bazel_config
+          tools/bazel build --lto=none --notrim \
+            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
+            //common:kernel_aarch64_config
+          cp bazel-bin/common/kernel_aarch64_config/out_dir/.config ${{ github.workspace }}/bazel_config
+          echo "Bazel config copied"
 
       - name: Inject Defconfig Flags (for Make)
         uses: ./.github/actions/kernel-config
