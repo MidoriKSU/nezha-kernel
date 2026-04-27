@@ -101,22 +101,39 @@ jobs:
           cd KernelSU
           patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/kowsu/10_enable_susfs_for_ksu.patch"
           patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/kowsu/90_fix_susfs_symbols.patch"
+          
+          KSU_GIT_VERSION=$(git rev-list --count HEAD)
+          KSU_VERSION=$((30000 + KSU_GIT_VERSION))
+          echo "ccflags-y += -DKSU_VERSION=${KSU_VERSION}" >> ../drivers/kernelsu/Makefile
           cd ..
 
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch"
+
+          sed -i '1a export KBUILD_BUILD_USER="kleaf"' scripts/mkcompile_h
+          sed -i '1a export KBUILD_BUILD_HOST="build-host"' scripts/mkcompile_h
+          sed -i '1a export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"' scripts/mkcompile_h
+          sed -i '1a export KBUILD_BUILD_VERSION="1"' scripts/mkcompile_h
+
+          echo '#!/bin/sh' > scripts/setlocalversion
+          echo 'echo "-android16-5-g5a0e85dd9db0-ab14499855"' >> scripts/setlocalversion
+          chmod +x scripts/setlocalversion
 
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
           perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' BUILD.bazel || true
           sed -i 's/protected_modules = \[.*\]/protected_modules = []/' modules.bzl || true
-          sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" build/kernel/kleaf/impl/stamp.bzl || true
-          sed -i 's/ -dirty//g' scripts/setlocalversion || true
+
+          git config --global user.email "midori01@users.noreply.github.com"
+          git config --global user.name "midori01"
+          git add .
+          git commit -m "Inject MidoriSU / SuSFS / KMI Bypass"
 
       - name: Compile Kernel (Bazel / Kleaf)
         run: |
           cd kernel_workspace
           
           cat > common/arch/arm64/configs/midori_susfs.fragment <<-'EOF'
+          CONFIG_LOCALVERSION=""
           CONFIG_KSU=y
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
@@ -130,16 +147,10 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
           
-          EPOCH_TIME=$(date -d "2025-11-26 11:16:14" +%s)
-          
           tools/bazel build \
             --config=release \
             --stamp \
             --notrim \
-            --action_env=KBUILD_BUILD_USER="kleaf" \
-            --action_env=KBUILD_BUILD_HOST="build-host" \
-            --action_env=KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025" \
-            --action_env=SOURCE_DATE_EPOCH=$EPOCH_TIME \
             --defconfig_fragment=//common:arch/arm64/configs/midori_susfs.fragment \
             //common:kernel_aarch64_dist
 
@@ -147,16 +158,13 @@ jobs:
         run: |
           cd kernel_workspace
           
-          echo "Searching for compiled Image..."
           IMAGE="$(find -L bazel-bin/ -name "Image" -type f | grep "kernel_aarch64" | head -n 1)"
           
           if [ -z "$IMAGE" ]; then
-             echo "Trying deep fallback search..."
              IMAGE="$(find -L . -name "Image" -type f | grep -v "AnyKernel3" | head -n 1)"
           fi
           
-          echo "Target Image located at: $IMAGE"
-          [ -f "$IMAGE" ] || (echo "Binary Missing!" && exit 1)
+          [ -f "$IMAGE" ] || exit 1
           
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/Image && cd AnyKernel3
