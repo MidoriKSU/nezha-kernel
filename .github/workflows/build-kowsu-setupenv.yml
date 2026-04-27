@@ -36,6 +36,12 @@ jobs:
           curl -L "https://android.googlesource.com/kernel/prebuilts/build-tools/+archive/refs/heads/main.tar.gz" | tar -xzf - -C kernel_workspace/build-tools
           echo "Build tools downloaded"
 
+      - name: Download AOSP Clang r536225
+        run: |
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o kernel_workspace/clang.tar.gz
+          mkdir -p kernel_workspace/clang-aosp && tar -xf kernel_workspace/clang.tar.gz -C kernel_workspace/clang-aosp
+          rm kernel_workspace/clang.tar.gz
+          echo "Clang downloaded"
       - name: Download Official Kernel Source
         run: |
           mkdir -p kernel_workspace/common
@@ -47,7 +53,7 @@ jobs:
         run: |
           cd kernel_workspace/common
           # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           if [ ! -d "KernelSU" ]; then
             git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
             ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -59,7 +65,7 @@ jobs:
         run: |
           cd kernel_workspace/common
           # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
 
       - name: Inject Defconfig Flags
@@ -75,7 +81,7 @@ jobs:
         run: |
           cd kernel_workspace/common
           # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           sed -i '1a export KBUILD_BUILD_USER="kleaf"' scripts/mkcompile_h
           sed -i '1a export KBUILD_BUILD_HOST="build-host"' scripts/mkcompile_h
           sed -i '1a export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"' scripts/mkcompile_h
@@ -90,7 +96,7 @@ jobs:
         run: |
           cd kernel_workspace
           # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           
           # Create cc-wrapper for identity spoofing
           REAL_CLANG="$(which clang)"
