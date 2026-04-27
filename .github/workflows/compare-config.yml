@@ -36,13 +36,6 @@ jobs:
           sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
           sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion || true
 
-      - name: Setup KowSU
-        run: |
-          cd kernel_workspace/common
-          git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
-          ln -sf ../KernelSU/kernel drivers/kernelsu
-          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
-          grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
       - name: Copy Bazel Fragment
         run: |
@@ -67,6 +60,14 @@ jobs:
           variant: "kowsu"
           device: nezha
           enable_susfs: "false"
+
+      - name: Setup KowSU
+        run: |
+          cd kernel_workspace/common
+          git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
       - name: Generate Make .config
         run: |
