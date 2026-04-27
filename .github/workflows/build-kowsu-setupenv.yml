@@ -1,4 +1,4 @@
-name: Build KowSU with merged configs
+name: Build KowSU with Bazel config
 
 on:
   workflow_dispatch:
@@ -71,15 +71,6 @@ jobs:
           cd kernel_workspace/common
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
 
-      - name: Inject Defconfig Flags
-        uses: ./.github/actions/kernel-config
-        with:
-          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
-          build_config_path: "kernel_workspace/common/build.config.gki"
-          variant: "kowsu"
-          device: ${{ inputs.device }}
-          enable_susfs: "false"
-
       - name: Inject Patches & KMI Bypass
         run: |
           cd kernel_workspace/common
@@ -93,19 +84,28 @@ jobs:
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
 
-      - name: Merge Configs (like Kleaf)
+      - name: Apply Bazel .config & Inject Network Configs
         run: |
           cd kernel_workspace/common
           export ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu-
           
-          make O=out gki_defconfig
+          # Copy Bazel reference .config
+          cp "${{ github.workspace }}/config/bazel_config" .config
           
-          scripts/kconfig/merge_config.sh -m -O out \
-            arch/arm64/configs/gki_defconfig \
-            kernel/configs/android-base.config \
-            kernel/configs/android-recommended.config
+          # Inject our LOCALVERSION
+          sed -i 's|CONFIG_LOCALVERSION=.*|CONFIG_LOCALVERSION="-android16-5-g5a0e85dd9db0-ab14499855-4k"|' .config
           
-          cp out/.config .config
+          # Ensure KSU is enabled
+          grep -q "CONFIG_KSU=y" .config || echo "CONFIG_KSU=y" >> .config
+          grep -q "CONFIG_KPROBES=y" .config || echo "CONFIG_KPROBES=y" >> .config
+          grep -q "CONFIG_HAVE_KPROBES=y" .config || echo "CONFIG_HAVE_KPROBES=y" >> .config
+          
+          # Inject networking configs if missing
+          grep -q "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" .config || sed -i '/CONFIG_KSU/a\CONFIG_NETFILTER_XT_TARGET_TPROXY=y' .config
+          grep -q "CONFIG_TCP_CONG_BBR=y" .config || sed -i '/CONFIG_TCP_CONG_ADVANCED/a\CONFIG_TCP_CONG_BBR=y' .config
+          
+          mkdir -p out
+          cp .config out/.config
           make O=out olddefconfig
 
       - name: Compile Kernel
@@ -127,10 +127,12 @@ jobs:
           
           echo "=== Image size ==="
           ls -lh out/arch/arm64/boot/Image
-          echo "=== Check 16K pages ==="
-          grep "CONFIG_ARM64_16K_PAGES\|CONFIG_ARM64_4K_PAGES" out/.config || true
+          echo "=== Check LOCALVERSION ==="
+          grep "CONFIG_LOCALVERSION" out/.config
+          echo "=== Check Page Size ==="
+          grep "CONFIG_ARM64_.*K_PAGES" out/.config | grep -v "^#"
           echo "=== Check LTO ==="
-          grep "CONFIG_LTO" out/.config || true
+          grep "CONFIG_LTO" out/.config | grep -v "^#"
 
       - name: Package
         run: |
@@ -144,7 +146,7 @@ jobs:
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/
           cd AnyKernel3
-          ZIP_NAME="kowsu-${{ inputs.device }}-merged-$(date +'%y%m%d').zip"
+          ZIP_NAME="kowsu-${{ inputs.device }}-bazelconfig-$(date +'%y%m%d').zip"
           zip -r9 "$ZIP_NAME" *
           mv "$ZIP_NAME" ../
           cd ..
@@ -153,5 +155,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: kowsu-${{ inputs.device }}-merged
+          name: kowsu-${{ inputs.device }}-bazelconfig
           path: ${{ env.ZIP_NAME }}
