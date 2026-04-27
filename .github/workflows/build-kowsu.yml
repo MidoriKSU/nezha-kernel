@@ -193,7 +193,7 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="$KCFLAGS" \
+            KCFLAGS="$KCFLAGS -fno-sanitize=cfi" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
@@ -203,7 +203,7 @@ jobs:
 
           make -j$(nproc --all) O=out \
             ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="$KCFLAGS" \
+            KCFLAGS="$KCFLAGS -fno-sanitize=cfi" \
             CC="$CC" LD="$LD" AR="$AR" NM="$NM" OBJCOPY="$OBJCOPY" OBJDUMP="$OBJDUMP" \
             READELF="$READELF" STRIP="$STRIP" HOSTCC="$CC" HOSTCXX="$CC" \
             HOSTLD="$HOSTLD" HOSTAR="$HOSTAR" CLANG_TRIPLE="$CLANG_TRIPLE" \
