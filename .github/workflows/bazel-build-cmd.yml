@@ -36,7 +36,6 @@ jobs:
           sed -i '/stable_scmversion_cmd/s/-maybe-dirty//g' build/kernel/kleaf/impl/stamp.bzl || true
           sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion || true
 
-
       - name: Copy Bazel Fragment
         run: |
           cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
@@ -45,27 +44,26 @@ jobs:
         run: |
           cd kernel_workspace
           
-          # 方法1：用 Bazel aquery 查看构建动作
-          echo "=== Bazel aquery ==="
-          tools/bazel aquery --config=release --stamp --notrim \
-            --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
-            'mnemonic("KernelBuild", //common:kernel_aarch64)' 2>/dev/null | head -100 || echo "aquery failed"
-          
-          # 方法2：用 --verbose_failures 触发编译，抓取完整命令
-          echo ""
-          echo "=== Verbose build (first 200 lines) ==="
+          # 完整编译一次，用 --sandbox_debug 保留输出
           tools/bazel build --config=release --stamp --notrim \
             --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
-            --verbose_failures \
-            //common:kernel_aarch64 2>&1 | grep -E "make|clang|CC|LD|AR|KCFLAGS|LTO|TRIM" | head -50 || echo "build failed (expected, just collecting cmds)"
-          
-          # 方法3：直接看 Bazel 生成的 make 命令行
-          echo ""
-          echo "=== Bazel make command from last build ==="
-          find bazel-out -name "*.params" -o -name "*-2.params" 2>/dev/null | head -5 | xargs cat 2>/dev/null | head -50
+            --sandbox_debug \
+            //common:kernel_aarch64 2>&1 | tee /tmp/bazel_build.log
           
           echo ""
-          echo "=== Stamped build info ==="
-          cat bazel-out/volatile-status.txt 2>/dev/null | head -20
-          cat bazel-out/stable-status.txt 2>/dev/null | head -20
+          echo "=== Extracted make commands ==="
+          grep -E "make|\bclang\b|\bCC\b|\bLD\b|KCFLAGS" /tmp/bazel_build.log | head -50
+          
+          echo ""
+          echo "=== Bazel command line from last build ==="
+          find bazel-out -name "*.sh" -path "*/kernel_aarch64*.sh" 2>/dev/null | head -3 | xargs cat 2>/dev/null | head -100
+          
+          echo ""
+          echo "=== Image size ==="
+          find bazel-bin -name "Image" -type f | head -3 | xargs ls -lh 2>/dev/null
 
+      - name: Upload Build Log
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: bazel-build-log
+          path: /tmp/bazel_build.log
