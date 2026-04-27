@@ -1,0 +1,13 @@
+# lto_none_defconfig
+# CONFIG_LTO_CLANG is not set
+CONFIG_LTO_NONE=y
+# CONFIG_LTO_CLANG_THIN is not set
+# CONFIG_LTO_CLANG_FULL is not set
+# CONFIG_THINLTO is not set
+CONFIG_FRAME_WARN=0
+
+# notrim_defconfig
+# CONFIG_MODULE_SIG_PROTECT is not set
+
+# signing_modules_disabled_defconfig
+# CONFIG_MODULE_SIG_ALL is not set
