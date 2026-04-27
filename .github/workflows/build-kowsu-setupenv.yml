@@ -33,9 +33,9 @@ jobs:
       - name: Download Official Build Scripts
         run: |
           mkdir -p kernel_workspace/build
-          aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/build/+archive/refs/heads/android16-6.12.tar.gz" -o kernel_workspace/build.tar.gz
-          tar -xzf kernel_workspace/build.tar.gz -C kernel_workspace/build
-          rm kernel_workspace/build.tar.gz
+          aria2c -s16 -x16 -k1M "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" -o kernel_workspace/build-tools.zip
+          unzip -q kernel_workspace/build-tools.zip -d kernel_workspace/build
+          rm kernel_workspace/build-tools.zip
           echo "Build scripts downloaded"
 
       - name: Download Official Kernel Source
