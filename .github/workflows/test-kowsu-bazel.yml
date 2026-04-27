@@ -22,7 +22,15 @@ jobs:
             binutils python-is-python3 libssl-dev libelf-dev libdw-dev \
             curl bison flex make git perl gcc bc zip unzip aria2
 
+      - name: Cache Kernel Source
+        id: cache-kernel
+        uses: actions/cache@v4
+        with:
+          path: kernel_workspace
+          key: gki-source-android16-6.12-2025-06-v2
+
       - name: Repo Init & Sync GKI Kernel
+        if: steps.cache-kernel.outputs.cache-hit != 'true'
         run: |
           mkdir -p kernel_workspace
           curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
@@ -61,7 +69,6 @@ jobs:
       - name: Copy nezha fragment
         run: |
           cp .github/actions/kernel-config/nezha_gki.fragment kernel_workspace/common/arch/arm64/configs/nezha_gki.fragment
-          echo "Fragment copied"
 
       - name: Configure build.config for Bazel
         run: |
@@ -73,7 +80,7 @@ jobs:
       - name: Build with Bazel
         run: |
           cd kernel_workspace
-          tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=none \
+          tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=none --notrim \
             --defconfig_fragment=//common:arch/arm64/configs/nezha_gki.fragment \
             //common:kernel_aarch64_dist
           
