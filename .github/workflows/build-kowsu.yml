@@ -136,6 +136,11 @@ jobs:
           device: ${{ inputs.device }}
           enable_susfs: "false"
 
+      - name: Disable CFI (Temp)
+        run: |
+          cd kernel_workspace/common
+          sed -i "s/CONFIG_CFI_CLANG=y/CONFIG_CFI_CLANG=n/" arch/arm64/configs/gki_defconfig
+          echo "CFI disabled"
       - name: Compile Kernel
         run: |
           CLANG_BIN="${{ env.CLANG_BIN }}"
