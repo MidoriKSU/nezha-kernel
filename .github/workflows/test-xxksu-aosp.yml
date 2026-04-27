@@ -1,4 +1,4 @@
-name: Test xxKSU AOSP (repo init)
+name: Test xxKSU AOSP (cctv18 method)
 
 on:
   workflow_dispatch:
@@ -12,6 +12,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
+        with:
+          clean: false
+          submodules: true
 
       - name: Free Disk Space & Install Dependencies
         run: |
@@ -22,23 +25,17 @@ jobs:
             binutils python-is-python3 libssl-dev libelf-dev libdw-dev \
             curl bison flex make git perl gcc bc zip unzip aria2
 
-      - name: Repo Init & Sync GKI Kernel
+      - name: Initialize Workspace & Toolchains
         run: |
-          mkdir -p kernel_workspace
-          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
-          chmod +x /usr/local/bin/repo
-          cd kernel_workspace
-          repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1 --partial-clone --clone-filter=blob:limit=10M
-          repo sync -c -j$(nproc --all) --fail-fast --no-tags --force-sync --no-clone-bundle
-          sed -i 's/ -dirty//g' common/scripts/setlocalversion
-
-      - name: Init Toolchain (AOSP Clang)
-        run: |
+          mkdir -p kernel_workspace && cd kernel_workspace
+          aria2c -s16 -x16 -k1M https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/android16-6.12-2025-06.tar.gz -o common.tar.gz
+          mkdir common && tar -xf common.tar.gz -C common && rm common.tar.gz
           aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o clang.tar.gz
           mkdir -p "$GITHUB_WORKSPACE/clang-aosp" && tar -xf clang.tar.gz -C "$GITHUB_WORKSPACE/clang-aosp"
           echo "CLANG_BIN=$GITHUB_WORKSPACE/clang-aosp/bin" >> $GITHUB_ENV
           "$GITHUB_WORKSPACE/clang-aosp/bin/clang" --version | head -1
           "$GITHUB_WORKSPACE/clang-aosp/bin/ld.lld" --version | head -1
+          sed -i 's/ -dirty//g' common/scripts/setlocalversion
 
       - name: Setup xxKSU
         run: |
@@ -54,6 +51,31 @@ jobs:
           cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
           cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
           cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+
+      - name: Create Patch Healer
+        run: |
+          cat > kernel_workspace/common/heal_patch.py << 'PYEOF'
+          import sys
+          with open(sys.argv[1], 'r', encoding='utf-8') as f:
+              lines = f.read().splitlines()
+          with open(sys.argv[1], 'w', encoding='utf-8', newline='\n') as f:
+              in_hunk = False
+              for line in lines:
+                  if line.startswith('@@ '): in_hunk = True; f.write(line + '\n'); continue
+                  if line.startswith(('--- ', '+++ ')): in_hunk = False; f.write(line + '\n'); continue
+                  if not in_hunk: f.write(line + '\n'); continue
+                  if len(line) == 0: f.write(' \n')
+                  elif line[0] not in ['+', '-', ' ', '\\']: f.write(' ' + line + '\n')
+                  else: f.write(line + '\n')
+          PYEOF
+
+      - name: Apply Patches xxKSU (Security & Scope Hooks)
+        run: |
+          cd kernel_workspace/common
+          python3 heal_patch.py "${{ github.workspace }}/.github/patches/xxksu/manual-security-hooks-v1.9.patch"
+          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/manual-security-hooks-v1.9.patch"
+          python3 heal_patch.py "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.0.patch"
+          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.0.patch"
 
       - name: Apply KMI Bypass
         run: |
@@ -77,9 +99,9 @@ jobs:
 
       - name: Compile Kernel (Identity Spoofing)
         run: |
-          WORKDIR="$(pwd)"
           REAL_CLANG="${{ env.CLANG_BIN }}/clang"
           export PATH="${{ env.CLANG_BIN }}:$PATH"
+
           cd kernel_workspace/common
 
           cat > cc-wrapper <<-EOF
@@ -112,12 +134,12 @@ jobs:
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/ && cd AnyKernel3
           BUILD_DATE="$(date +'%y%m%d')"
-          ZIP_NAME="xxksu-nezha-repo-test-${BUILD_DATE}.zip"
+          ZIP_NAME="xxksu-nezha-test-${BUILD_DATE}.zip"
           zip -r9 "../$ZIP_NAME" *
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: xxksu-repo-test
+          name: xxksu-test
           path: kernel_workspace/${{ env.ZIP_NAME }}
