@@ -1,4 +1,4 @@
-name: Show Notrim Defconfig
+name: Show All Bazel Defconfig Fragments
 
 on:
   workflow_dispatch:
@@ -25,11 +25,29 @@ jobs:
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
 
-      - name: Show Notrim Config
+      - name: Show Key Defconfig Fragments
         run: |
+          DIR="kernel_workspace/build/kernel/kleaf/impl/defconfig"
+          
           echo "=== notrim_defconfig ==="
-          cat kernel_workspace/build/kernel/kleaf/impl/defconfig/notrim_defconfig
+          cat $DIR/notrim_defconfig
           
           echo ""
-          echo "=== Also check other defconfig files ==="
-          ls kernel_workspace/build/kernel/kleaf/impl/defconfig/
+          echo "=== lto_none_defconfig ==="
+          cat $DIR/lto_none_defconfig
+          
+          echo ""
+          echo "=== rust_defconfig ==="
+          cat $DIR/rust_defconfig
+          
+          echo ""
+          echo "=== signing_modules_disabled_defconfig ==="
+          cat $DIR/signing_modules_disabled_defconfig
+          
+          echo ""
+          echo "=== debug_defconfig ==="
+          cat $DIR/debug_defconfig
+          
+          echo ""
+          echo "=== btf_debug_info_enabled_defconfig ==="
+          cat $DIR/btf_debug_info_enabled_defconfig
