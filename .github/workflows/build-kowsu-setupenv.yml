@@ -71,26 +71,6 @@ jobs:
           POST_DEFCONFIG_CMDS="check_defconfig"
           CONFEOF
 
-      - name: Inject Configs & Patches
-        run: |
-          cd kernel_workspace/common
-          
-          # Set up version
-          sed -i '1a export KBUILD_BUILD_USER="kleaf"' scripts/mkcompile_h
-          sed -i '1a export KBUILD_BUILD_HOST="build-host"' scripts/mkcompile_h
-          sed -i '1a export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"' scripts/mkcompile_h
-          sed -i '1a export KBUILD_BUILD_VERSION="1"' scripts/mkcompile_h
-          
-          echo '#!/bin/sh' > scripts/setlocalversion
-          echo 'echo "-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
-          chmod +x scripts/setlocalversion
-
-          # KMI bypass
-          sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
-          rm -rf android/abi_gki_protected_exports_* || true
-
-          # Inject networking/BBR/netfilter configs
-          cat >> arch/arm64/configs/gki_defconfig << 'CONFEOF'
 
           # KowSU
           CONFIG_KSU=y
@@ -141,6 +121,27 @@ jobs:
           CONFIG_IP6_NF_TARGET_REDIRECT=y
           CONFEOF
 
+      - name: Inject Defconfig Flags
+        uses: ./.github/actions/kernel-config
+        with:
+          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
+          build_config_path: "kernel_workspace/common/build.config.gki"
+          variant: "kowsu"
+          device: ${{ inputs.device }}
+          enable_susfs: "false"
+
+      - name: Inject Patches & KMI Bypass
+        run: |
+          cd kernel_workspace/common
+          sed -i '1a export KBUILD_BUILD_USER="kleaf"' scripts/mkcompile_h
+          sed -i '1a export KBUILD_BUILD_HOST="build-host"' scripts/mkcompile_h
+          sed -i '1a export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"' scripts/mkcompile_h
+          sed -i '1a export KBUILD_BUILD_VERSION="1"' scripts/mkcompile_h
+          echo '#!/bin/sh' > scripts/setlocalversion
+          echo 'echo "-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
+          chmod +x scripts/setlocalversion
+          sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
+          rm -rf android/abi_gki_protected_exports_* || true
       - name: Compile Kernel (with _setup_env.sh)
         run: |
           cd kernel_workspace
