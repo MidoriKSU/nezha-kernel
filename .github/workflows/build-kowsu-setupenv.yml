@@ -64,6 +64,7 @@ jobs:
       - name: Setup Build Environment
         run: |
           cp "${{ github.workspace }}/.github/scripts/_setup_env.sh" kernel_workspace/_setup_env.sh
+          echo "Build environment ready"
 
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
@@ -96,12 +97,13 @@ jobs:
           
           echo "=== OUT_DIR: ${OUT_DIR} ==="
           echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
+          echo "=== DEFCONFIG: ${DEFCONFIG} ==="
           
           cd common
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} gki_defconfig
+          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} ${DEFCONFIG}
           make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} Image
           
           echo "=== Image size ==="
@@ -115,6 +117,11 @@ jobs:
           source _setup_env.sh
           
           IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
+          if [ ! -f "$IMAGE" ]; then
+            echo "Image not found at $IMAGE"
+            find . -name "Image" -type f -ls
+            exit 1
+          fi
           ls -lh "$IMAGE"
           
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
@@ -130,4 +137,4 @@ jobs:
         uses: actions/upload-artifact@v7.0.0
         with:
           name: kowsu-${{ inputs.device }}-setupenv
-          path: ${{ env.ZIP_NAME }}
+          path: kernel_workspace/${{ env.ZIP_NAME }}
