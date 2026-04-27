@@ -102,12 +102,34 @@ jobs:
           echo "=== OUT_DIR: ${OUT_DIR} ==="
           echo "=== TOOL_ARGS: ${TOOL_ARGS} ==="
           
+          # cc-wrapper for identity spoofing
+          REAL_CLANG="$(which clang)"
+          cat > common/cc-wrapper <<-EOF
+          #!/bin/bash
+          if [[ "\$*" == *"--version"* ]]; then
+              echo "Android (14043575, +pgo, +bolt, +lto, +mlgo, based on r536225) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project b3a530ec6537146650e42be89f1089e9a3588460), LLD 19.0.1"
+              exit 0
+          fi
+          exec "$REAL_CLANG" "\$@"
+          EOF
+          chmod +x common/cc-wrapper
+          export CC="$(pwd)/common/cc-wrapper"
+          
           cd common
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
+          export KCFLAGS="-mbranch-protection=standard -fstack-protector-strong"
           
-          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} ${DEFCONFIG}
-          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} Image
+          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} KCFLAGS="$KCFLAGS" ${DEFCONFIG}
+          
+          # Force 4K pages for device compatibility
+          ${OUT_DIR}/scripts/config --file ${OUT_DIR}/.config \
+            --enable CONFIG_ARM64_4K_PAGES \
+            --disable CONFIG_ARM64_16K_PAGES \
+            --disable CONFIG_ARM64_64K_PAGES
+          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} olddefconfig
+          
+          make -j$(nproc --all) O=${OUT_DIR} ${TOOL_ARGS} KCFLAGS="$KCFLAGS" Image
           
           echo "=== Image size ==="
           ls -lh ${OUT_DIR}/arch/arm64/boot/Image
