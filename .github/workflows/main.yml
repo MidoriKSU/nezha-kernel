@@ -14,7 +14,7 @@ on:
 jobs:
   build-xxksu:
     name: xxKSU nezha ${{ inputs.toolchain }}
-    uses: ./.github/workflows/build-xxksu.yml
+#    uses: ./.github/workflows/build-xxksu.yml
     with:
       device: nezha
       toolchain: ${{ inputs.toolchain }}
@@ -28,7 +28,7 @@ jobs:
 
   build-kowsu-susfs:
     name: KowSU+SuSFS nezha ${{ inputs.toolchain }}
-    uses: ./.github/workflows/build-kowsu-susfs.yml
+#    uses: ./.github/workflows/build-kowsu-susfs.yml
     with:
       device: nezha
       toolchain: ${{ inputs.toolchain }}
