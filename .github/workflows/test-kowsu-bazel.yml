@@ -38,7 +38,7 @@ jobs:
           cd kernel_workspace
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android16-6.12-2025-06 --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle
-          sed -i 's/ -dirty//g' common/scripts/setlocalversion
+          sed -i 's/ -dirty//g; s/-maybe-dirty//g' common/scripts/setlocalversion
 
       - name: Setup KowSU
         run: |
