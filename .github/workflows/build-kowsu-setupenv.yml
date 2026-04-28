@@ -43,10 +43,12 @@ jobs:
           rm kernel_workspace/clang.tar.gz
           echo "Clang downloaded"
 
-      - name: Download Official Kernel Source
+      - name: Download Official Kernel Source (android16-6.12-2025-06)
         run: |
           mkdir -p kernel_workspace/common
-          curl -L "https://android.googlesource.com/kernel/common/+archive/refs/heads/android16-6.12.tar.gz" | tar -xzf - -C kernel_workspace/common
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/android16-6.12-2025-06.tar.gz" -o kernel_workspace/kernel.tar.gz
+          tar -xzf kernel_workspace/kernel.tar.gz -C kernel_workspace/common
+          rm kernel_workspace/kernel.tar.gz
           echo "Kernel source downloaded"
 
       - name: Setup KowSU
@@ -87,13 +89,17 @@ jobs:
           cd kernel_workspace/common
           export PATH="$(pwd)/../clang-aosp/bin:$(pwd)/../build-tools/linux-x86/bin:$PATH"
           
-          # ====== 版本号硬编码：修改 scripts/setlocalversion 脚本 ======
-          # 因为源码来自 tar.gz 无 git 环境，setlocalversion 会错误追加 -dirty
-          # 所以直接让脚本只输出版本号，不检测 git 状态
+          # ====== 版本号修复 ======
+          # Google +archive 导出的 tar.gz 可能缺失 KERNELVERSION 定义
+          # 强制补全，确保版本号完整
+          if ! grep -q "^KERNELVERSION" Makefile; then
+            sed -i '/^EXTRAVERSION/i KERNELVERSION = 6.12.23' Makefile
+          fi
+          sed -i 's/^KERNELVERSION =.*/KERNELVERSION = 6.12.23/' Makefile
+          
+          # 跳过 dirty 检测
           cat > scripts/setlocalversion << 'SCRIPT_EOF'
           #!/bin/sh
-          # 直接输出版本号，跳过所有 git 和 dirty 检测
-          echo "-android16-5-g5a0e85dd9db0-ab14499855-4k"
           exit 0
           SCRIPT_EOF
           chmod +x scripts/setlocalversion
@@ -102,8 +108,8 @@ jobs:
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
           
-          echo "Version hardcoding applied"
-          echo "setlocalversion will output: $(scripts/setlocalversion)"
+          echo "Version fix applied"
+          grep "^KERNELVERSION\|^EXTRAVERSION" Makefile
 
       - name: Compile Official GKI Kernel
         run: |
