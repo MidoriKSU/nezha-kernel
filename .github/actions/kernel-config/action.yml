@@ -26,13 +26,6 @@ runs:
       run: |
         DEFCONFIG="${{ inputs.defconfig_path }}"
         
-        # Device-Specific LOCALVERSION
-        sed -i '/CONFIG_LOCALVERSION/d' $DEFCONFIG
-        if [ "${{ inputs.device }}" = "popsicle" ]; then
-          echo 'CONFIG_LOCALVERSION="-android16-5-g6928909e3148-abogki444322847-4k"' >> $DEFCONFIG
-        elif [ "${{ inputs.device }}" = "nezha" ]; then
-          echo 'CONFIG_LOCALVERSION="-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> $DEFCONFIG
-        fi
 
         cat >> $DEFCONFIG <<-'EOF'
         # Core Bootability & Performance
