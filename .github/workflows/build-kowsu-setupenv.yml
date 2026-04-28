@@ -42,28 +42,27 @@ jobs:
           mkdir -p kernel_workspace/clang-aosp && tar -xf kernel_workspace/clang.tar.gz -C kernel_workspace/clang-aosp
           rm kernel_workspace/clang.tar.gz
           echo "Clang downloaded"
+
       - name: Download Official Kernel Source
         run: |
           mkdir -p kernel_workspace/common
           curl -L "https://android.googlesource.com/kernel/common/+archive/refs/heads/android16-6.12.tar.gz" | tar -xzf - -C kernel_workspace/common
-          sed -i 's/ -dirty//g' kernel_workspace/common/scripts/setlocalversion
           echo "Kernel source downloaded"
 
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
-          # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/../clang-aosp/bin:$(pwd)/../build-tools/linux-x86/bin:$PATH"
           if [ ! -d "KernelSU" ]; then
             git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
             ln -sf ../KernelSU/kernel drivers/kernelsu
-          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
-          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
-          mkdir -p include/uapi
-          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
-          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
-          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
-          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+            cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
+            echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
+            mkdir -p include/uapi
+            cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
+            cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
+            cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
+            cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
             grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
             grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
           fi
@@ -71,8 +70,7 @@ jobs:
       - name: Apply SYSVIPC KABI Fix
         run: |
           cd kernel_workspace/common
-          # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/../clang-aosp/bin:$(pwd)/../build-tools/linux-x86/bin:$PATH"
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
 
       - name: Inject Defconfig Flags
@@ -87,18 +85,32 @@ jobs:
       - name: Inject Patches & KMI Bypass
         run: |
           cd kernel_workspace/common
-          # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          export PATH="$(pwd)/../clang-aosp/bin:$(pwd)/../build-tools/linux-x86/bin:$PATH"
+          
+          # ====== 版本号硬编码：直接修改 Makefile ======
+          # 因为源码来自 tar.gz 无 git 环境，setlocalversion 会错误追加 -dirty
+          sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -android16-5-g5a0e85dd9db0-ab14499855-4k/' Makefile
+          sed -i 's/^KERNELVERSION =.*/KERNELVERSION = 6.12.23/' Makefile
+          
+          # 注释掉 Makefile 中所有调用 scripts/setlocalversion 的行
+          sed -i 's/^\( *\)\(.*\$.*scripts\/setlocalversion.*\)/\1# DISABLED: \2/' Makefile
+          
+          # 同时也从 scripts/setlocalversion 源头防一手
           echo '#!/bin/sh' > scripts/setlocalversion
-          echo 'echo "6.12.23-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
+          echo 'exit 0' >> scripts/setlocalversion
           chmod +x scripts/setlocalversion
+          
+          # KMI 绕过
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
+          
+          echo "Version hardcoding applied"
+          grep "^EXTRAVERSION" Makefile
+          grep "^KERNELVERSION" Makefile
 
       - name: Compile Official GKI Kernel
         run: |
           cd kernel_workspace
-          # Add build-tools to PATH for lld, depmod etc.
           export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           
           # Create cc-wrapper for identity spoofing
@@ -142,6 +154,13 @@ jobs:
           # Build
           make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 KCFLAGS="-fno-sanitize=cfi" Image
           
+          # 验证版本字符串
+          echo ""
+          echo "========================================="
+          echo "   Verifying kernel version string"
+          echo "========================================="
+          strings out/arch/arm64/boot/Image | grep "Linux version" | head -1
+          echo "========================================="
           echo "=== Image size ==="
           ls -lh out/arch/arm64/boot/Image
 
@@ -153,6 +172,14 @@ jobs:
             exit 1
           fi
           ls -lh "$IMAGE"
+          
+          # 打包前再次验证
+          echo ""
+          echo "========================================="
+          echo "   Final Image Version Check"
+          echo "========================================="
+          strings "$IMAGE" | grep "Linux version" | head -3
+          echo "========================================="
           
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           cp "$IMAGE" ./AnyKernel3/
