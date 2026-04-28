@@ -124,6 +124,10 @@ jobs:
           sed -i 's/protected_modules = \[.*\]/protected_modules = []/' modules.bzl || true
           sed -i 's/-d $(INSTALL_MOD_PATH)/-b $(INSTALL_MOD_PATH)/g' scripts/Makefile.modinst || true
           sed -i 's/depmod -d/depmod -b/g' scripts/Makefile.modinst || true
+          sed -i 's/"$DEPMOD" -d/"$DEPMOD" -b/g' scripts/depmod.sh || true
+          sed -i 's/ $DEPMOD -d/ $DEPMOD -b/g' scripts/depmod.sh || true
+          sed -i 's/ -d / -b /g' scripts/depmod.sh || true
+          sed -i 's/depmod -d/depmod -b/g' Makefile || true
 
           git config --global user.email "midori01@users.noreply.github.com"
           git config --global user.name "midori01"
