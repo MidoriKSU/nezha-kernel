@@ -1,0 +1,40 @@
+name: Version Diagnosis
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Kernel Source
+        run: |
+          mkdir -p kernel_workspace/common
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/android16-6.12-2025-06.tar.gz" -o kernel.tar.gz
+          tar -xzf kernel.tar.gz -C kernel_workspace/common
+          cd kernel_workspace/common
+          
+          echo "========================================="
+          echo "   DIAGNOSIS"
+          echo "========================================="
+          
+          echo ""
+          echo "=== 1. Makefile version variables ==="
+          grep -n "^VERSION\|^PATCHLEVEL\|^SUBLEVEL\|^KERNELVERSION\|^EXTRAVERSION\|^NAME" Makefile 2>/dev/null || echo "NOT FOUND"
+          
+          echo ""
+          echo "=== 2. setlocalversion check ==="
+          if [ -f scripts/setlocalversion ]; then
+            echo "First 5 lines:"
+            head -5 scripts/setlocalversion
+            echo "Output: $(sh scripts/setlocalversion 2>&1)"
+          else
+            echo "NOT FOUND"
+          fi
+          
+          echo ""
+          echo "=== 3. Directory structure (top level) ==="
+          ls -la | head -20
+          
+          echo ""
+          echo "========================================="
