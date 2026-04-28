@@ -42,6 +42,7 @@ jobs:
           mkdir -p kernel_workspace/clang-aosp && tar -xf kernel_workspace/clang.tar.gz -C kernel_workspace/clang-aosp
           rm kernel_workspace/clang.tar.gz
           echo "Clang downloaded"
+
       - name: Download Official Kernel Source
         run: |
           mkdir -p kernel_workspace/common
@@ -52,18 +53,16 @@ jobs:
       - name: Setup KowSU
         run: |
           cd kernel_workspace/common
-          # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           if [ ! -d "KernelSU" ]; then
             git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
             ln -sf ../KernelSU/kernel drivers/kernelsu
-          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
-          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
-          mkdir -p include/uapi
-          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
-          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
-          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
-          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+            cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
+            echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
+            mkdir -p include/uapi
+            cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
+            cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
+            cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
+            cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
             grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
             grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
           fi
@@ -71,8 +70,6 @@ jobs:
       - name: Apply SYSVIPC KABI Fix
         run: |
           cd kernel_workspace/common
-          # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
 
       - name: Inject Defconfig Flags
@@ -87,8 +84,6 @@ jobs:
       - name: Inject Patches & KMI Bypass
         run: |
           cd kernel_workspace/common
-          # Add build-tools to PATH for lld, depmod etc.
-          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           echo '#!/bin/sh' > scripts/setlocalversion
           echo 'echo "6.12.23-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
           chmod +x scripts/setlocalversion
@@ -98,10 +93,13 @@ jobs:
       - name: Compile Official GKI Kernel
         run: |
           cd kernel_workspace
-          # Add build-tools to PATH for lld, depmod etc.
           export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           
-          # Create cc-wrapper for identity spoofing
+          # Copy fakestat/faketime libs for LD_PRELOAD
+          cp "${{ github.workspace }}/lib/libfakestat.so" common/
+          cp "${{ github.workspace }}/lib/libfaketimeMT.so" common/
+          
+          # Create cc-wrapper with LD_PRELOAD like cctv18
           REAL_CLANG="$(which clang)"
           cat > cc-wrapper <<-EOF
           #!/bin/bash
@@ -109,25 +107,26 @@ jobs:
               echo "Android (14043575, +pgo, +bolt, +lto, +mlgo, based on r536225) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project b3a530ec6537146650e42be89f1089e9a3588460), LLD 19.0.1"
               exit 0
           fi
+          export LD_PRELOAD="\$(pwd)/libfakestat.so \$(pwd)/libfaketimeMT.so"
+          export FAKESTAT="2025-09-12 04:57:41"
+          export FAKETIME="@2025-09-12 04:57:41"
           exec "$REAL_CLANG" "\$@"
           EOF
           chmod +x cc-wrapper
-          export CC="$(pwd)/cc-wrapper"
           
           cd common
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          export LLVM=1 LLVM_IAS=1
-          
-          # Generate config
           export KBUILD_BUILD_USER="kleaf"
           export KBUILD_BUILD_HOST="build-host"
           export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"
           export KBUILD_BUILD_VERSION="1"
-          sed -i "s/CONFIG_CFI_CLANG=y/CONFIG_CFI_CLANG=n/" arch/arm64/configs/gki_defconfig
+          export LLVM=1 LLVM_IAS=1
+          export CC="$(pwd)/../cc-wrapper"
+          export LD=ld.lld
+          
           make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 gki_defconfig
           
-          # Enable 4K pages and KSU
           scripts/config --file out/.config -e CONFIG_KSU
           scripts/config --file out/.config --set-str CONFIG_LOCALVERSION ""
           scripts/config --file out/.config -e CONFIG_ARM64_4K_PAGES
@@ -135,8 +134,7 @@ jobs:
           scripts/config --file out/.config -d CONFIG_ARM64_64K_PAGES
           make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 olddefconfig
           
-          # Build
-          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 KCFLAGS="-fno-sanitize=cfi" Image
+          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 Image
           
           echo "=== Image size ==="
           ls -lh out/arch/arm64/boot/Image
