@@ -90,7 +90,7 @@ jobs:
           # Add build-tools to PATH for lld, depmod etc.
           export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           echo '#!/bin/sh' > scripts/setlocalversion
-          echo 'echo "-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
+          echo 'echo "6.12.23-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
           chmod +x scripts/setlocalversion
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
