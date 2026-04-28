@@ -89,18 +89,10 @@ jobs:
           cd kernel_workspace/common
           export PATH="$(pwd)/../clang-aosp/bin:$(pwd)/../build-tools/linux-x86/bin:$PATH"
           
-          # ====== 版本号修复 ======
-          # Google +archive 导出的 tar.gz 可能缺失 KERNELVERSION 定义
-          # 强制补全，确保版本号完整
-          if ! grep -q "^KERNELVERSION" Makefile; then
-            sed -i '/^EXTRAVERSION/i KERNELVERSION = 6.12.23' Makefile
-          fi
-          sed -i 's/^KERNELVERSION =.*/KERNELVERSION = 6.12.23/' Makefile
-          
-          # 跳过 dirty 检测
+          # setlocalversion 直接输出需要的后缀，跳过 git/dirty 检测
           cat > scripts/setlocalversion << 'SCRIPT_EOF'
           #!/bin/sh
-          exit 0
+          echo "-android16-5-g5a0e85dd9db0-ab14499855-4k"
           SCRIPT_EOF
           chmod +x scripts/setlocalversion
           
@@ -108,8 +100,7 @@ jobs:
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
           
-          echo "Version fix applied"
-          grep "^KERNELVERSION\|^EXTRAVERSION" Makefile
+          echo "setlocalversion output: $(scripts/setlocalversion)"
 
       - name: Compile Official GKI Kernel
         run: |
