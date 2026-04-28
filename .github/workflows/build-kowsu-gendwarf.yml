@@ -132,7 +132,6 @@ jobs:
           export KBUILD_BUILD_HOST="build-host"
           export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"
           export KBUILD_BUILD_VERSION="1"
-          sed -i "s/CONFIG_CFI_CLANG=y/CONFIG_CFI_CLANG=n/" arch/arm64/configs/gki_defconfig
           make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 gki_defconfig
           
           # Enable 4K pages and KSU
