@@ -1,0 +1,178 @@
+name: Build KowSU Gendwarf Stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Device'
+        required: true
+        type: choice
+        options:
+          - nezha
+          - popsicl
+
+jobs:
+  build:
+    name: KowSU ${{ inputs.device }} Official GKI
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Free Disk Space & Install Dependencies
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune -af 2>/dev/null || true
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev \
+            curl bison flex make git perl gcc bc zip unzip aria2
+
+      - name: Download Official Build Tools
+        run: |
+          mkdir -p kernel_workspace/build-tools
+          curl -L "https://android.googlesource.com/kernel/prebuilts/build-tools/+archive/refs/heads/main.tar.gz" | tar -xzf - -C kernel_workspace/build-tools
+          echo "Build tools downloaded"
+
+      - name: Download AOSP Clang r536225
+        run: |
+          aria2c -s16 -x16 -k1M "https://github.com/MidoriKSU/dami-kernel-build/releases/download/0/clang-r536225.tar.gz" -o kernel_workspace/clang.tar.gz
+          mkdir -p kernel_workspace/clang-aosp && tar -xf kernel_workspace/clang.tar.gz -C kernel_workspace/clang-aosp
+          rm kernel_workspace/clang.tar.gz
+          echo "Clang downloaded"
+      - name: Download Official Kernel Source
+        run: |
+          mkdir -p kernel_workspace/common
+          curl -L "https://android.googlesource.com/kernel/common/+archive/refs/heads/android16-6.12.tar.gz" | tar -xzf - -C kernel_workspace/common
+          sed -i 's/ -dirty//g' kernel_workspace/common/scripts/setlocalversion
+          echo "Kernel source downloaded"
+
+      - name: Setup KowSU
+        run: |
+          cd kernel_workspace/common
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          if [ ! -d "KernelSU" ]; then
+            git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
+            ln -sf ../KernelSU/kernel drivers/kernelsu
+          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
+          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
+          mkdir -p include/uapi
+          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
+          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+            grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+            grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          fi
+
+      - name: Apply SYSVIPC KABI Fix
+        run: |
+          cd kernel_workspace/common
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          patch -p1 < "${{ github.workspace }}/.github/patches/gki/fix_sysvipc_kabi_a16-6.12.patch" 2>/dev/null || true
+
+      - name: Inject Defconfig Flags
+        uses: ./.github/actions/kernel-config
+        with:
+          defconfig_path: "kernel_workspace/common/arch/arm64/configs/gki_defconfig"
+          build_config_path: "kernel_workspace/common/build.config.gki"
+          variant: "kowsu"
+          device: ${{ inputs.device }}
+          enable_susfs: "false"
+
+      - name: Inject Patches & KMI Bypass
+        run: |
+          cd kernel_workspace/common
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          echo '#!/bin/sh' > scripts/setlocalversion
+          echo 'echo "6.12.23-android16-5-g5a0e85dd9db0-ab14499855-4k"' >> scripts/setlocalversion
+          chmod +x scripts/setlocalversion
+          sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
+          rm -rf android/abi_gki_protected_exports_* || true
+
+      - name: Compile Official GKI Kernel
+        run: |
+          cd kernel_workspace
+          # Add build-tools to PATH for lld, depmod etc.
+          export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
+          
+          # Create cc-wrapper for identity spoofing
+          REAL_CLANG="$(which clang)"
+          cat > cc-wrapper <<-EOF
+          #!/bin/bash
+          if [[ "\$*" == *"--version"* ]]; then
+              echo "Android (14043575, +pgo, +bolt, +lto, +mlgo, based on r536225) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project b3a530ec6537146650e42be89f1089e9a3588460), LLD 19.0.1"
+              exit 0
+          fi
+          exec "$REAL_CLANG" "\$@"
+          EOF
+          chmod +x cc-wrapper
+          export CC="$(pwd)/cc-wrapper"
+          
+          cd common
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export HOSTCC=clang
+          export HOSTCXX=clang++
+          export AR=llvm-ar
+          export NM=llvm-nm
+          export OBJCOPY=llvm-objcopy
+          export OBJDUMP=llvm-objdump
+          export STRIP=llvm-strip
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          export LLVM=1 LLVM_IAS=1
+          
+          # Generate config
+          export KBUILD_BUILD_USER="kleaf"
+          export KBUILD_BUILD_HOST="build-host"
+          export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"
+          export KBUILD_BUILD_VERSION="1"
+          sed -i "s/CONFIG_CFI_CLANG=y/CONFIG_CFI_CLANG=n/" arch/arm64/configs/gki_defconfig
+          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 gki_defconfig
+          
+          # Enable 4K pages and KSU
+          scripts/config --file out/.config -e CONFIG_KSU
+          scripts/config --file out/.config --disable MODVERSIONS
+          scripts/config --file out/.config --disable MODULE_SIG
+          scripts/config --file out/.config --disable MODULE_SIG_ALL
+          scripts/config --file out/.config --disable MODULE_SIG_FORCE
+          scripts/config --file out/.config --set-str CONFIG_LOCALVERSION ""
+          scripts/config --file out/.config -e CONFIG_ARM64_4K_PAGES
+          scripts/config --file out/.config -d CONFIG_ARM64_16K_PAGES
+          scripts/config --file out/.config -d CONFIG_ARM64_64K_PAGES
+          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 olddefconfig
+          
+          # Build
+          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 KCFLAGS="-fno-sanitize=cfi" Image
+          
+          echo "=== Image size ==="
+          ls -lh out/arch/arm64/boot/Image
+
+      - name: Package
+        run: |
+          IMAGE="kernel_workspace/common/out/arch/arm64/boot/Image"
+          if [ ! -f "$IMAGE" ]; then
+            echo "Image not found!"
+            exit 1
+          fi
+          ls -lh "$IMAGE"
+          
+          git clone https://github.com/yapixel/AnyKernel3 --depth=1
+          cp "$IMAGE" ./AnyKernel3/
+          cd AnyKernel3
+          ZIP_NAME="kowsu-${{ inputs.device }}-official-$(date +'%y%m%d').zip"
+          zip -r9 "$ZIP_NAME" *
+          mv "$ZIP_NAME" ../
+          cd ..
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: kowsu-${{ inputs.device }}-official
+          path: ${{ env.ZIP_NAME }}
