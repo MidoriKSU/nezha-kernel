@@ -87,17 +87,15 @@ jobs:
           cd kernel_workspace/common
           export PATH="$(pwd)/../clang-aosp/bin:$(pwd)/../build-tools/linux-x86/bin:$PATH"
           
-          # ====== 版本号硬编码：直接修改 Makefile ======
+          # ====== 版本号硬编码：修改 scripts/setlocalversion 脚本 ======
           # 因为源码来自 tar.gz 无 git 环境，setlocalversion 会错误追加 -dirty
-          sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -android16-5-g5a0e85dd9db0-ab14499855-4k/' Makefile
-          sed -i 's/^KERNELVERSION =.*/KERNELVERSION = 6.12.23/' Makefile
-          
-          # 注释掉 Makefile 中所有调用 scripts/setlocalversion 的行
-          sed -i 's/^\( *\)\(.*\$.*scripts\/setlocalversion.*\)/\1# DISABLED: \2/' Makefile
-          
-          # 同时也从 scripts/setlocalversion 源头防一手
-          echo '#!/bin/sh' > scripts/setlocalversion
-          echo 'exit 0' >> scripts/setlocalversion
+          # 所以直接让脚本只输出版本号，不检测 git 状态
+          cat > scripts/setlocalversion << 'SCRIPT_EOF'
+          #!/bin/sh
+          # 直接输出版本号，跳过所有 git 和 dirty 检测
+          echo "-android16-5-g5a0e85dd9db0-ab14499855-4k"
+          exit 0
+          SCRIPT_EOF
           chmod +x scripts/setlocalversion
           
           # KMI 绕过
@@ -105,8 +103,7 @@ jobs:
           rm -rf android/abi_gki_protected_exports_* || true
           
           echo "Version hardcoding applied"
-          grep "^EXTRAVERSION" Makefile
-          grep "^KERNELVERSION" Makefile
+          echo "setlocalversion will output: $(scripts/setlocalversion)"
 
       - name: Compile Official GKI Kernel
         run: |
