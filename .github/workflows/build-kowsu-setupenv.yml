@@ -89,8 +89,6 @@ jobs:
           chmod +x scripts/setlocalversion
           sed -i '/bad_version:/,/^}/ s/return 0;/return 1;/' kernel/module/version.c
           rm -rf android/abi_gki_protected_exports_* || true
-          sed -i 's/protected_modules = \[.*\]/protected_modules = []/' modules.bzl || true
-          perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' BUILD.bazel || true
 
       - name: Compile Official GKI Kernel
         run: |
