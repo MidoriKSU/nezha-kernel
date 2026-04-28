@@ -124,6 +124,10 @@ jobs:
           export LLVM=1 LLVM_IAS=1
           
           # Generate config
+          export KBUILD_BUILD_USER="kleaf"
+          export KBUILD_BUILD_HOST="build-host"
+          export KBUILD_BUILD_TIMESTAMP="Wed Nov 26 11:16:14 UTC 2025"
+          export KBUILD_BUILD_VERSION="1"
           make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 gki_defconfig
           
           # Enable 4K pages and KSU
