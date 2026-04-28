@@ -55,7 +55,7 @@ jobs:
           # Add build-tools to PATH for lld, depmod etc.
           export PATH="$(pwd)/clang-aosp/bin:$(pwd)/build-tools/linux-x86/bin:$PATH"
           if [ ! -d "KernelSU" ]; then
-            git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
+            git clone --depth=1 --branch=main https://github.com/midori01/KernelSU.git KernelSU
             ln -sf ../KernelSU/kernel drivers/kernelsu
           cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
           echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
