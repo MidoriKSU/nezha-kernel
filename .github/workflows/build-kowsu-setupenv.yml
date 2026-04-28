@@ -135,7 +135,7 @@ jobs:
           make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 olddefconfig
           
           # Build
-          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 Image
+          make -j$(nproc --all) O=out LLVM=1 LLVM_IAS=1 KCFLAGS="-fno-sanitize=cfi" Image
           
           echo "=== Image size ==="
           ls -lh out/arch/arm64/boot/Image
