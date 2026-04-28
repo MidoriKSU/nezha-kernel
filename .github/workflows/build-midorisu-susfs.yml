@@ -123,33 +123,33 @@ jobs:
           perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' BUILD.bazel || true
           sed -i 's/protected_modules = \[.*\]/protected_modules = []/' modules.bzl || true
 
-          REAL_DEPMOD_PATH=$(which depmod)
-          if [ -z "$REAL_DEPMOD_PATH" ]; then REAL_DEPMOD_PATH="/usr/sbin/depmod"; fi
+          cd ..
           
-          mkdir -p scripts/
-          
-          cat <<EOF > scripts/depmod
+          find prebuilts/ -name "depmod" \( -type f -o -type l \) | while read -r DEPMOD_PATH; do
+              rm -f "$DEPMOD_PATH"
+              cat << 'EOF' > "$DEPMOD_PATH"
           #!/bin/bash
-          
           ARGS=()
-          for arg in "\$@"; do
-              if [ "\$arg" == "-d" ]; then
+          for arg in "$@"; do
+              if [ "$arg" == "-d" ]; then
                   ARGS+=("-b")
               else
-                  ARGS+=("\$arg")
+                  ARGS+=("$arg")
               fi
           done
-          
-          exec "$REAL_DEPMOD_PATH" "\${ARGS[@]}"
+          DIR="$(dirname "$0")"
+          if [ -x "$DIR/toybox" ]; then
+              exec "$DIR/toybox" depmod "${ARGS[@]}"
+          elif [ -x "$DIR/kmod" ]; then
+              exec "$DIR/kmod" depmod "${ARGS[@]}"
+          else
+              exec /sbin/depmod "${ARGS[@]}"
+          fi
           EOF
-          
-          chmod +x scripts/depmod
-          
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/scripts" >> $GITHUB_ENV
-          echo "PATH=$(pwd)/scripts:$PATH" >> $GITHUB_ENV
+              chmod +x "$DEPMOD_PATH"
+          done
 
-          find . -type f \( -name "Makefile*" -o -name "*.sh" \) -exec sed -i 's/depmod -d/depmod -b/g' {} + || true
-          find . -type f \( -name "Makefile*" -o -name "*.sh" \) -exec sed -i 's/-d $(INSTALL_MOD_PATH)/-b $(INSTALL_MOD_PATH)/g' {} + || true
+          cd common
 
           git config --global user.email "midori01@users.noreply.github.com"
           git config --global user.name "midori01"
