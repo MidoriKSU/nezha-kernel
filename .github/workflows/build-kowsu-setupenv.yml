@@ -129,6 +129,10 @@ jobs:
           
           # Enable 4K pages and KSU
           scripts/config --file out/.config -e CONFIG_KSU
+          scripts/config --file out/.config --disable MODVERSIONS
+          scripts/config --file out/.config --disable MODULE_SIG
+          scripts/config --file out/.config --disable MODULE_SIG_ALL
+          scripts/config --file out/.config --disable MODULE_SIG_FORCE
           scripts/config --file out/.config --set-str CONFIG_LOCALVERSION ""
           scripts/config --file out/.config -e CONFIG_ARM64_4K_PAGES
           scripts/config --file out/.config -d CONFIG_ARM64_16K_PAGES
